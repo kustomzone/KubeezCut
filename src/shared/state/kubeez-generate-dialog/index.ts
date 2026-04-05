@@ -1,0 +1,1 @@
+export { useKubeezGenerateDialogStore } from './store';

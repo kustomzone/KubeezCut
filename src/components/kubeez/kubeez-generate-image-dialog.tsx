@@ -1,0 +1,1063 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { KUBEEZCUT_LOGO_URL } from '@/components/brand/kubeez-cut-logo';
+import {
+  KubeezGenerateModelsColumn,
+  KubeezGeneratePromptField,
+  KubeezGenerateSelectedModelPanel,
+  type ModelTab,
+} from '@/components/kubeez/kubeez-generate-dialog-fragments';
+import { useSettingsStore } from '@/features/settings/stores/settings-store';
+import { useProjectStore } from '@/features/projects/stores/project-store';
+import { usePlaybackStore } from '@/shared/state/playback';
+import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
+import { useMediaLibraryStore } from '@/features/media-library/stores/media-library-store';
+import { runKubeezGenerateJobInBackground } from '@/components/kubeez/kubeez-generate-job-runner';
+import { effectiveMaxReferenceFilesForModel } from '@/infrastructure/kubeez/kubeez-documented-reference-limits';
+import {
+  FALLBACK_MUSIC_MODELS,
+  FALLBACK_TEXT_TO_IMAGE_MODELS,
+  fetchKubeezGroupedMediaModels,
+  KUBEEZ_SPEECH_DIALOGUE_MODEL,
+  type KubeezMediaModelOption,
+} from '@/infrastructure/kubeez/kubeez-models';
+import type { KubeezModelSettings } from '@/infrastructure/kubeez/model-family-registry';
+import {
+  getVariantsForBaseCardId,
+  resolveGenerationModelId,
+  resolveSelectionFromConcreteModelId,
+} from '@/infrastructure/kubeez/model-resolve';
+import {
+  findModelFamilyGridItemForModelId,
+  videoModelIdEncodesVariantParams,
+} from '@/infrastructure/kubeez/kubeez-video-model-variants';
+import { KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS, KUBEEZ_DIALOGUE_VOICE_OPTIONS } from '@/infrastructure/kubeez/kubeez-audio-generations';
+import { toast } from 'sonner';
+import { createLogger } from '@/shared/logging/logger';
+import { Film, Paperclip, X } from 'lucide-react';
+import { cn } from '@/shared/ui/cn';
+
+const logger = createLogger('KubeezGenerateDialog');
+
+const ASPECT_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4'] as const;
+
+const DEFAULT_MODEL_ID = 'nano-banana-2';
+
+type ReferenceAttachment = {
+  id: string;
+  file: File;
+  previewUrl: string | null;
+};
+
+export interface KubeezGenerateImageDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  timelinePlacement?: { trackId: string; trackName: string };
+}
+
+export function KubeezGenerateImageDialog({
+  open,
+  onOpenChange,
+  timelinePlacement,
+}: KubeezGenerateImageDialogProps) {
+  const kubeezApiKey = useSettingsStore((s) => s.kubeezApiKey);
+  const kubeezApiBaseUrl = useSettingsStore((s) => s.kubeezApiBaseUrl);
+  const currentProject = useProjectStore((s) => s.currentProject);
+  const fps = useTimelineStore((s) => s.fps);
+
+  const promptRef = useRef('');
+  const [promptResetKey, setPromptResetKey] = useState(0);
+  const openWasFalse = useRef(true);
+
+  const [aspectRatio, setAspectRatio] = useState<string>('1:1');
+  const [videoDuration, setVideoDuration] = useState('');
+  /** Brief lock while enqueueing a background job (avoid double submit) */
+  const [isStartingJob, setIsStartingJob] = useState(false);
+  const [imageModels, setImageModels] = useState<KubeezMediaModelOption[]>(FALLBACK_TEXT_TO_IMAGE_MODELS);
+  const [videoModels, setVideoModels] = useState<KubeezMediaModelOption[]>([]);
+  const [musicModels, setMusicModels] = useState<KubeezMediaModelOption[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string>(DEFAULT_MODEL_ID);
+  const [musicInstrumental, setMusicInstrumental] = useState(false);
+  const [dialogueVoice, setDialogueVoice] = useState('Adam');
+  const [dialogueLanguage, setDialogueLanguage] = useState('auto');
+  const [dialogueStability, setDialogueStability] = useState('0.5');
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsHint, setModelsHint] = useState<string | null>(null);
+  const [modelTab, setModelTab] = useState<ModelTab>('all');
+  const [referenceAttachments, setReferenceAttachments] = useState<ReferenceAttachment[]>([]);
+  const referenceFileInputRef = useRef<HTMLInputElement>(null);
+
+  const speechModels = useMemo(() => [KUBEEZ_SPEECH_DIALOGUE_MODEL], []);
+
+  const allModels = useMemo(
+    () => [...imageModels, ...videoModels, ...musicModels, ...speechModels],
+    [imageModels, musicModels, speechModels, videoModels]
+  );
+
+  const allModelsSorted = useMemo(
+    () =>
+      [...imageModels, ...videoModels, ...musicModels, ...speechModels].sort((a, b) =>
+        a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' })
+      ),
+    [imageModels, musicModels, speechModels, videoModels]
+  );
+
+  const resolvedSelection = useMemo(
+    () =>
+      resolveSelectionFromConcreteModelId(
+        selectedModelId,
+        imageModels,
+        videoModels,
+        musicModels
+      ),
+    [selectedModelId, imageModels, videoModels, musicModels]
+  );
+
+  const patchModelSettings = useCallback(
+    (patch: Partial<KubeezModelSettings>) => {
+      setSelectedModelId((prev) => {
+        const cur = resolveSelectionFromConcreteModelId(
+          prev,
+          imageModels,
+          videoModels,
+          musicModels
+        );
+        const nextSettings: KubeezModelSettings = { ...cur.settings, ...patch };
+        if (patch.kling26 != null || cur.settings.kling26 != null) {
+          nextSettings.kling26 = {
+            mode: 'text-to-video',
+            duration: '5s',
+            withAudio: false,
+            ...cur.settings.kling26,
+            ...patch.kling26,
+          };
+        }
+        if (patch.videoAxes != null || cur.settings.videoAxes != null) {
+          nextSettings.videoAxes = {
+            resolution: null,
+            duration: '4s',
+            withAudio: false,
+            ...cur.settings.videoAxes,
+            ...patch.videoAxes,
+          };
+        }
+        if (patch.kling30 != null || cur.settings.kling30 != null) {
+          nextSettings.kling30 = {
+            line: 'std',
+            motionResolution: '720p',
+            ...cur.settings.kling30,
+            ...patch.kling30,
+          };
+        }
+        if (patch.sora2 != null || cur.settings.sora2 != null) {
+          nextSettings.sora2 = {
+            tier: 'base',
+            mode: 'text-to-video',
+            duration: '10s',
+            proQuality: 'standard',
+            ...cur.settings.sora2,
+            ...patch.sora2,
+          };
+        }
+        if (patch.veo31 != null || cur.settings.veo31 != null) {
+          nextSettings.veo31 = {
+            tier: 'fast',
+            mode: 'text-to-video',
+            ...cur.settings.veo31,
+            ...patch.veo31,
+          };
+        }
+        if (patch.wan25 != null || cur.settings.wan25 != null) {
+          nextSettings.wan25 = {
+            useSimpleCatalogId: true,
+            source: 'text',
+            duration: '5s',
+            resolution: '1080p',
+            ...cur.settings.wan25,
+            ...patch.wan25,
+          };
+        }
+        let variants = getVariantsForBaseCardId(
+          cur.baseCardId,
+          imageModels,
+          videoModels,
+          musicModels
+        );
+        if (variants.length === 0) {
+          const hit =
+            [...imageModels, ...videoModels, ...musicModels, ...speechModels].find(
+              (m) => m.model_id === prev
+            ) ?? null;
+          variants = hit ? [hit] : [];
+        }
+        return resolveGenerationModelId({
+          baseCardId: cur.baseCardId,
+          settings: nextSettings,
+          variants,
+        });
+      });
+    },
+    [imageModels, videoModels, musicModels, speechModels]
+  );
+
+  const selectedModel = useMemo(
+    () => allModels.find((m) => m.model_id === selectedModelId) ?? imageModels[0] ?? allModels[0],
+    [allModels, imageModels, selectedModelId]
+  );
+
+  /** Catalog row for the resolved concrete model (correct limits when a family card applies). */
+  const uiModel = useMemo(() => {
+    const rid = resolvedSelection.resolvedModelId;
+    const byResolved = allModels.find((m) => m.model_id === rid);
+    if (byResolved) return byResolved;
+    const bySelected = allModels.find((m) => m.model_id === selectedModelId);
+    if (bySelected) return bySelected;
+    return selectedModel ?? undefined;
+  }, [allModels, resolvedSelection.resolvedModelId, selectedModelId, selectedModel]);
+
+  const isVideoModel = uiModel?.mediaKind === 'video';
+  const isMusicModel = uiModel?.mediaKind === 'music';
+  const isSpeechModel = uiModel?.mediaKind === 'speech';
+  const showReferenceSection = !isMusicModel && !isSpeechModel;
+
+  const promptFieldGroup = isMusicModel ? 'music' : isSpeechModel ? 'speech' : 'media';
+
+  const referenceFileLimit = useMemo(
+    () => effectiveMaxReferenceFilesForModel(uiModel ?? null),
+    [uiModel]
+  );
+
+  const promptMaxChars = useMemo(() => {
+    if (!uiModel) return undefined;
+    if (uiModel.mediaKind === 'music') return uiModel.prompt_max_chars ?? 400;
+    if (uiModel.mediaKind === 'speech') return 5000;
+    return uiModel.prompt_max_chars;
+  }, [uiModel]);
+
+  const promptLabel = isSpeechModel ? 'Script' : isMusicModel ? 'Music prompt' : 'Prompt';
+  const promptPlaceholder = isSpeechModel
+    ? 'What should the voice say? (single-speaker; use Kubeez for multi-line dialogue in the app.)'
+    : isMusicModel
+      ? 'Genre, mood, instruments, tempo…'
+      : 'Describe what to generate…';
+
+  const showAspectRatioControl =
+    uiModel?.mediaKind === 'image' && uiModel.showAspectRatio !== false;
+  const aspectChoices = useMemo(() => {
+    if (!showAspectRatioControl) return [];
+    const o = uiModel?.aspectRatioOptions;
+    return o?.length ? o : [...ASPECT_OPTIONS];
+  }, [showAspectRatioControl, uiModel?.aspectRatioOptions]);
+
+  const resolvedModelId = resolvedSelection.resolvedModelId;
+
+  const videoVariantEncodedInModelId = useMemo(
+    () => Boolean(isVideoModel && videoModelIdEncodesVariantParams(resolvedModelId)),
+    [isVideoModel, resolvedModelId]
+  );
+
+  const showDurationControl = Boolean(
+    isVideoModel &&
+      !videoVariantEncodedInModelId &&
+      (uiModel?.durationOptions?.length ?? 0) > 0
+  );
+
+  const videoSubmitBlocked = Boolean(
+    isVideoModel &&
+      uiModel?.supportsImageToVideo &&
+      !uiModel?.supportsTextToVideo &&
+      referenceAttachments.length === 0
+  );
+
+  const videoFooterHint = useMemo(() => {
+    const m = uiModel;
+    if (!m || m.mediaKind !== 'video') return null;
+    if (m.supportsImageToVideo && !m.supportsTextToVideo) {
+      return 'This model requires reference media (e.g. first frame). Upload under Reference media, then generate.';
+    }
+    if (m.supportsImageToVideo && m.supportsTextToVideo) {
+      return 'Text-to-video without uploads, or add reference media for image-to-video. Duration applies when the model supports it.';
+    }
+    return null;
+  }, [uiModel]);
+
+  const modelFamilyForSelection = useMemo(() => {
+    if (!uiModel) return null;
+    if (uiModel.mediaKind === 'image') {
+      return findModelFamilyGridItemForModelId(imageModels, selectedModelId);
+    }
+    if (uiModel.mediaKind === 'video') {
+      return findModelFamilyGridItemForModelId(videoModels, selectedModelId);
+    }
+    if (uiModel.mediaKind === 'music') {
+      return findModelFamilyGridItemForModelId(musicModels, selectedModelId);
+    }
+    return null;
+  }, [uiModel, imageModels, videoModels, musicModels, selectedModelId]);
+
+  useEffect(() => {
+    if (open && openWasFalse.current) {
+      setPromptResetKey((k) => k + 1);
+    }
+    openWasFalse.current = !open;
+  }, [open]);
+
+  useEffect(() => {
+    if (!uiModel || !showAspectRatioControl) return;
+    const opts = uiModel.aspectRatioOptions;
+    if (opts?.length) {
+      setAspectRatio((prev) => (opts.includes(prev) ? prev : opts[0]!));
+    }
+  }, [selectedModelId, uiModel, showAspectRatioControl]);
+
+  useEffect(() => {
+    const opts = uiModel?.durationOptions;
+    if (opts?.length) {
+      setVideoDuration((prev) => (opts.includes(prev) ? prev : opts[0]!));
+    } else {
+      setVideoDuration('');
+    }
+  }, [selectedModelId, uiModel?.durationOptions]);
+
+  useEffect(() => {
+    if (!open) {
+      setIsStartingJob(false);
+      setReferenceAttachments((prev) => {
+        for (const r of prev) {
+          if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
+        }
+        return [];
+      });
+      return;
+    }
+    setModelTab('all');
+
+    const apiKey = kubeezApiKey?.trim() ?? '';
+    if (!apiKey) {
+      setImageModels(FALLBACK_TEXT_TO_IMAGE_MODELS);
+      setVideoModels([]);
+      setMusicModels([...FALLBACK_MUSIC_MODELS]);
+      setSelectedModelId((prev) =>
+        FALLBACK_TEXT_TO_IMAGE_MODELS.some((m) => m.model_id === prev) ? prev : DEFAULT_MODEL_ID
+      );
+      setModelsHint(null);
+      setModelsLoading(false);
+      return;
+    }
+
+    const ac = new AbortController();
+    let cancelled = false;
+
+    setModelsLoading(true);
+    setModelsHint(null);
+
+    fetchKubeezGroupedMediaModels({
+      apiKey,
+      baseUrl: kubeezApiBaseUrl?.trim() || undefined,
+      signal: ac.signal,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        setImageModels(result.imageModels);
+        setVideoModels(result.videoModels);
+        setMusicModels(result.musicModels);
+
+        const hints: string[] = [];
+        if (!result.imageFromApi && apiKey) {
+          hints.push('Image models: using built-in list (API empty or unavailable).');
+        }
+        if (result.catalogAugmentedFromCache) {
+          hints.push(
+            'Extra catalog rows were merged from your last saved Kubeez sync (live API wins when both exist).'
+          );
+        }
+        if (result.videoSource === 'failed') {
+          hints.push('Video models could not be loaded.');
+        } else if (result.videoSource === 'empty') {
+          hints.push('No video models returned from the API.');
+        } else if (result.videoSource === 'cached') {
+          hints.push(
+            'Video: using saved catalog from your last successful sync (live list was empty or unavailable).'
+          );
+        }
+        if (result.musicSource === 'failed') {
+          hints.push('Music: API error — using built-in engine ids (V5, V4…).');
+        } else if (result.musicSource === 'fallback') {
+          hints.push('Music: API returned no models — using built-in engine ids.');
+        }
+        setModelsHint(hints.length > 0 ? hints.join(' ') : null);
+
+        setMusicInstrumental(false);
+        setDialogueVoice('Adam');
+        setDialogueLanguage('auto');
+        setDialogueStability('0.5');
+
+        setSelectedModelId((prev) => {
+          const flat = [
+            ...result.imageModels,
+            ...result.videoModels,
+            ...result.musicModels,
+            KUBEEZ_SPEECH_DIALOGUE_MODEL,
+          ];
+          if (flat.some((m) => m.model_id === prev)) return prev;
+          const preferred = result.imageModels.find((m) => m.model_id === DEFAULT_MODEL_ID);
+          return (
+            preferred?.model_id ??
+            result.imageModels[0]?.model_id ??
+            result.videoModels[0]?.model_id ??
+            result.musicModels[0]?.model_id ??
+            KUBEEZ_SPEECH_DIALOGUE_MODEL.model_id ??
+            prev
+          );
+        });
+      })
+      .catch((e) => {
+        if (cancelled || (e instanceof DOMException && e.name === 'AbortError')) return;
+        if (import.meta.env.DEV) {
+          logger.debug('Kubeez grouped models fetch failed', e);
+        }
+        setImageModels(FALLBACK_TEXT_TO_IMAGE_MODELS);
+        setVideoModels([]);
+        setMusicModels([...FALLBACK_MUSIC_MODELS]);
+        setModelsHint('Could not reach Kubeez. Using built-in image models.');
+        setSelectedModelId((prev) => {
+          const flat = [...FALLBACK_TEXT_TO_IMAGE_MODELS, ...FALLBACK_MUSIC_MODELS, KUBEEZ_SPEECH_DIALOGUE_MODEL];
+          return flat.some((m) => m.model_id === prev) ? prev : DEFAULT_MODEL_ID;
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [open, kubeezApiKey, kubeezApiBaseUrl]);
+
+  const handleSubmit = useCallback(async () => {
+    const trimmed = promptRef.current.trim();
+    if (!trimmed) {
+      toast.error(
+        uiModel?.mediaKind === 'speech'
+          ? 'Enter the script to speak.'
+          : uiModel?.mediaKind === 'music'
+            ? 'Enter a music prompt.'
+            : 'Enter a prompt.'
+      );
+      return;
+    }
+
+    const apiKey = kubeezApiKey?.trim() ?? '';
+    if (!apiKey) {
+      toast.error('Add your Kubeez API key in Settings.', {
+        action: {
+          label: 'Open Settings',
+          onClick: () => {
+            window.location.href = '/settings';
+          },
+        },
+      });
+      return;
+    }
+
+    const modelId = selectedModelId || uiModel?.model_id;
+    if (!modelId || !uiModel) {
+      toast.error('Select a model.');
+      return;
+    }
+
+    const isMusic = uiModel.mediaKind === 'music';
+    const isSpeech = uiModel.mediaKind === 'speech';
+
+    const resolved = resolveSelectionFromConcreteModelId(
+      selectedModelId,
+      imageModels,
+      videoModels,
+      musicModels
+    );
+    let variants = getVariantsForBaseCardId(
+      resolved.baseCardId,
+      imageModels,
+      videoModels,
+      musicModels
+    );
+    if (variants.length === 0 && uiModel) {
+      variants = [uiModel];
+    }
+    const mediaGenModelId = isSpeech
+      ? modelId
+      : resolveGenerationModelId({
+          baseCardId: resolved.baseCardId,
+          settings: resolved.settings,
+          variants,
+        });
+
+    if (videoSubmitBlocked) {
+      toast.error('This video model needs reference media. Upload an image or video first.');
+      return;
+    }
+
+    if (!isMusic && !isSpeech && referenceFileLimit !== undefined) {
+      if (referenceFileLimit === 0 && referenceAttachments.length > 0) {
+        toast.error('This model does not accept reference files.');
+        return;
+      }
+      if (referenceFileLimit > 0 && referenceAttachments.length > referenceFileLimit) {
+        toast.error(
+          `This model allows at most ${referenceFileLimit} reference file(s). Remove extras and try again.`
+        );
+        return;
+      }
+      const maxChars = uiModel.prompt_max_chars;
+      if (maxChars !== undefined && trimmed.length > maxChars) {
+        toast.error(`Prompt is too long for this model (max ${maxChars} characters).`);
+        return;
+      }
+    }
+
+    if (isMusic) {
+      const maxM = uiModel.prompt_max_chars ?? 400;
+      if (trimmed.length > maxM) {
+        toast.error(`Music prompt is too long (max ${maxM} characters).`);
+        return;
+      }
+    }
+
+    if (isSpeech && trimmed.length > 5000) {
+      toast.error('Script is too long (max 5000 characters).');
+      return;
+    }
+
+    const projectId = currentProject?.id;
+    if (!projectId) {
+      toast.error('No project loaded.');
+      return;
+    }
+
+    const canvasWidth = currentProject?.metadata.width ?? 1920;
+    const canvasHeight = currentProject?.metadata.height ?? 1080;
+
+    const isVideo = uiModel.mediaKind === 'video';
+    const baseUrl = kubeezApiBaseUrl?.trim() || undefined;
+
+    setIsStartingJob(true);
+    try {
+      const jobId = crypto.randomUUID();
+      const filterMimeCategory: 'image' | 'video' | 'audio' =
+        uiModel.mediaKind === 'video'
+          ? 'video'
+          : uiModel.mediaKind === 'image'
+            ? 'image'
+            : 'audio';
+
+      useMediaLibraryStore.getState().registerKubeezPendingGeneration({
+        id: jobId,
+        projectId,
+        label: trimmed.length > 200 ? `${trimmed.slice(0, 197)}…` : trimmed,
+        modelDisplayName: uiModel.display_name,
+        filterMimeCategory,
+        createdAt: Date.now(),
+        status: 'generating',
+      });
+
+      const playheadFrame = Math.max(0, Math.round(usePlaybackStore.getState().currentFrame));
+
+      if (isMusic) {
+        void runKubeezGenerateJobInBackground(jobId, {
+          apiKey,
+          baseUrl,
+          projectId,
+          prompt: trimmed,
+          mode: 'music',
+          mediaGenModelId,
+          musicInstrumental,
+          timelinePlacement,
+          playheadFrame,
+          fps,
+          canvasWidth,
+          canvasHeight,
+        });
+      } else if (isSpeech) {
+        const stability = Math.min(1, Math.max(0, Number.parseFloat(dialogueStability) || 0.5));
+        void runKubeezGenerateJobInBackground(jobId, {
+          apiKey,
+          baseUrl,
+          projectId,
+          prompt: trimmed,
+          mode: 'speech',
+          mediaGenModelId,
+          speechVoice: dialogueVoice,
+          speechLanguage: dialogueLanguage,
+          speechStability: stability,
+          timelinePlacement,
+          playheadFrame,
+          fps,
+          canvasWidth,
+          canvasHeight,
+        });
+      } else {
+        void runKubeezGenerateJobInBackground(jobId, {
+          apiKey,
+          baseUrl,
+          projectId,
+          prompt: trimmed,
+          mode: 'image_video',
+          mediaGenModelId,
+          imageVideo: {
+            isVideo,
+            aspectRatio,
+            videoDuration:
+              isVideo && videoDuration && !videoModelIdEncodesVariantParams(mediaGenModelId)
+                ? videoDuration
+                : undefined,
+            includeAspectRatio: !isVideo && uiModel.showAspectRatio !== false,
+            referenceFiles: referenceAttachments.map((r) => r.file),
+          },
+          timelinePlacement,
+          playheadFrame,
+          fps,
+          canvasWidth,
+          canvasHeight,
+        });
+      }
+
+      toast.message('Generating in background — watch the library for progress.');
+      onOpenChange(false);
+      setPromptResetKey((k) => k + 1);
+      setReferenceAttachments((prev) => {
+        for (const r of prev) {
+          if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
+        }
+        return [];
+      });
+    } finally {
+      setIsStartingJob(false);
+    }
+  }, [
+    aspectRatio,
+    currentProject?.id,
+    currentProject?.metadata.height,
+    currentProject?.metadata.width,
+    dialogueLanguage,
+    dialogueStability,
+    dialogueVoice,
+    fps,
+    imageModels,
+    kubeezApiBaseUrl,
+    kubeezApiKey,
+    musicInstrumental,
+    musicModels,
+    onOpenChange,
+    referenceAttachments,
+    referenceFileLimit,
+    uiModel,
+    selectedModelId,
+    speechModels,
+    timelinePlacement,
+    videoDuration,
+    videoModels,
+    videoSubmitBlocked,
+  ]);
+
+  const addReferenceFiles = useCallback((fileList: FileList | File[]) => {
+    const incoming = Array.from(fileList);
+    if (incoming.length === 0) return;
+    setReferenceAttachments((prev) => {
+      const cap = referenceFileLimit;
+      if (cap === undefined) {
+        toast.error(
+          'Reference upload limit is unknown for this model. Load models from Kubeez or see https://kubeez.com/docs/rest-api-model-requirements.'
+        );
+        return prev;
+      }
+      const room = cap - prev.length;
+      if (cap <= 0) {
+        toast.error('This model does not accept reference files.');
+        return prev;
+      }
+      if (room <= 0) {
+        toast.error(`You can attach at most ${cap} file(s) for this model.`);
+        return prev;
+      }
+      const take = incoming.slice(0, room);
+      if (incoming.length > room) {
+        toast.message(`Only the first ${room} file(s) were added (max ${cap} for this model).`);
+      }
+      const added: ReferenceAttachment[] = take.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      }));
+      return [...prev, ...added];
+    });
+  }, [referenceFileLimit]);
+
+  const removeReferenceAttachment = useCallback((id: string) => {
+    setReferenceAttachments((prev) => {
+      const item = prev.find((r) => r.id === id);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((r) => r.id !== id);
+    });
+  }, []);
+
+  const missingKey = !kubeezApiKey?.trim();
+  const libraryOnly = !timelinePlacement;
+
+  const referenceLabel =
+    isVideoModel && uiModel?.supportsImageToVideo && !uiModel?.supportsTextToVideo
+      ? 'Reference media (required)'
+      : 'Reference media';
+
+  const referenceHelperText =
+    referenceFileLimit === undefined
+      ? 'Reference limits follow each model in the Kubeez API/docs. If uploads stay disabled, sync models from your API key or see kubeez.com/docs/rest-api-model-requirements.'
+      : referenceFileLimit === 0
+        ? 'This model does not use reference uploads.'
+        : isVideoModel && uiModel?.supportsImageToVideo
+          ? 'Upload reference frame(s) or clip for image-to-video when required by the model.'
+          : 'Optional for image models — sent as source_media_urls for image-to-image/editing.';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[min(92vh,900px)] w-[min(98vw,80rem)] max-w-[min(98vw,80rem)] flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 shadow-2xl shadow-black/50 sm:rounded-2xl">
+        <div className="shrink-0 border-b border-border/60 bg-gradient-to-r from-muted/40 via-muted/20 to-transparent px-5 py-4 sm:px-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/90 p-1.5 shadow-inner shadow-black/20">
+              <img
+                src={KUBEEZCUT_LOGO_URL}
+                alt=""
+                width={36}
+                height={36}
+                decoding="async"
+                className="h-8 w-auto max-w-full object-contain"
+              />
+            </div>
+            <DialogHeader className="flex-1 space-y-1 text-left">
+              <DialogTitle className="text-base leading-tight">Generate media</DialogTitle>
+              <DialogDescription className="text-xs leading-snug">
+                {libraryOnly ? (
+                  <>
+                    Powered by Kubeez. New media is saved to this project&apos;s library; drag clips to the timeline
+                    when you&apos;re ready.
+                  </>
+                ) : (
+                  <>
+                    Powered by Kubeez. New media is placed on track &ldquo;{timelinePlacement.trackName}&rdquo; at the
+                    playhead.
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+        </div>
+
+        <div className="flex min-h-[min(52vh,420px)] flex-1 flex-col gap-4 overflow-hidden px-5 py-4 sm:px-6 lg:min-h-0 lg:flex-row lg:gap-0">
+          <KubeezGenerateModelsColumn
+            missingKey={missingKey}
+            modelsHint={modelsHint}
+            imageModels={imageModels}
+            videoModels={videoModels}
+            musicModels={musicModels}
+            speechModels={speechModels}
+            allModelsSorted={allModelsSorted}
+            allModelsCount={allModels.length}
+            modelTab={modelTab}
+            onModelTabChange={setModelTab}
+            selectedModelId={selectedModelId}
+            onSelectModelId={setSelectedModelId}
+            busy={isStartingJob}
+            modelsLoading={modelsLoading}
+          />
+
+          <div className="flex flex-1 flex-col gap-5 overflow-y-auto lg:min-h-0 lg:pl-6">
+            <KubeezGenerateSelectedModelPanel
+              model={uiModel ?? null}
+              selectedModelId={selectedModelId}
+              onSelectModelId={setSelectedModelId}
+              modelSettings={resolvedSelection.settings}
+              onPatchModelSettings={patchModelSettings}
+              modelFamilyItem={modelFamilyForSelection}
+              videoFooterHint={videoFooterHint}
+              busy={isStartingJob}
+              modelsLoading={modelsLoading}
+            />
+            <KubeezGeneratePromptField
+              key={`${promptFieldGroup}-${promptResetKey}`}
+              disabled={isStartingJob}
+              maxChars={promptMaxChars}
+              resetKey={promptResetKey}
+              promptRef={promptRef}
+              label={promptLabel}
+              placeholder={promptPlaceholder}
+              fieldId={`kubeez-prompt-${promptFieldGroup}`}
+            />
+
+            {isMusicModel && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-2.5">
+                <div className="min-w-0 space-y-0.5">
+                  <Label htmlFor="kubeez-music-instrumental" className="text-foreground/90">
+                    Instrumental
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">No vocals — matches Kubeez music API.</p>
+                </div>
+                <Switch
+                  id="kubeez-music-instrumental"
+                  checked={musicInstrumental}
+                  onCheckedChange={setMusicInstrumental}
+                  disabled={isStartingJob}
+                  aria-label="Instrumental music only"
+                />
+              </div>
+            )}
+
+            {isSpeechModel && (
+              <div className="grid shrink-0 gap-3 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-1">
+                  <Label className="text-foreground/90">Voice</Label>
+                  <Select value={dialogueVoice} onValueChange={setDialogueVoice} disabled={isStartingJob}>
+                    <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {KUBEEZ_DIALOGUE_VOICE_OPTIONS.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-1">
+                  <Label className="text-foreground/90">Language</Label>
+                  <Select value={dialogueLanguage} onValueChange={setDialogueLanguage} disabled={isStartingJob}>
+                    <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label className="text-foreground/90">Stability</Label>
+                  <Select value={dialogueStability} onValueChange={setDialogueStability} disabled={isStartingJob}>
+                    <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">0 (more expressive)</SelectItem>
+                      <SelectItem value="0.25">0.25</SelectItem>
+                      <SelectItem value="0.5">0.5 (default)</SelectItem>
+                      <SelectItem value="0.75">0.75</SelectItem>
+                      <SelectItem value="1">1 (most stable)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {showReferenceSection && (
+            <div className="shrink-0 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Label className="text-foreground/90">{referenceLabel}</Label>
+                <span className="text-[10px] text-muted-foreground tabular-nums">
+                  {referenceFileLimit === undefined || referenceFileLimit <= 0
+                    ? '—'
+                    : `${referenceAttachments.length}/${referenceFileLimit}`}
+                </span>
+              </div>
+              <p className="text-[11px] leading-snug text-muted-foreground">{referenceHelperText}</p>
+              <input
+                ref={referenceFileInputRef}
+                type="file"
+                className="sr-only"
+                accept="image/*,video/*,audio/*"
+                multiple
+                disabled={
+                  isStartingJob ||
+                  missingKey ||
+                  referenceFileLimit === undefined ||
+                  referenceFileLimit <= 0 ||
+                  (referenceFileLimit > 0 && referenceAttachments.length >= referenceFileLimit)
+                }
+                onChange={(e) => {
+                  const list = e.target.files;
+                  if (list?.length) addReferenceFiles(list);
+                  e.target.value = '';
+                }}
+              />
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isStartingJob || missingKey || referenceFileLimit === undefined || referenceFileLimit <= 0) return;
+                  const files = e.dataTransfer.files;
+                  if (files?.length) addReferenceFiles(files);
+                }}
+                className={cn(
+                  'rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3 transition-colors',
+                  'hover:border-border hover:bg-muted/25',
+                  (isStartingJob ||
+                    missingKey ||
+                    referenceFileLimit === undefined ||
+                    referenceFileLimit <= 0) &&
+                    'pointer-events-none opacity-50'
+                )}
+              >
+                {referenceAttachments.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <Paperclip className="h-5 w-5 text-muted-foreground" aria-hidden />
+                    <p className="text-xs text-muted-foreground">
+                      Drop files here or{' '}
+                      <button
+                        type="button"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                        disabled={
+                          isStartingJob ||
+                          missingKey ||
+                          referenceFileLimit === undefined ||
+                          referenceFileLimit <= 0
+                        }
+                        onClick={() => referenceFileInputRef.current?.click()}
+                      >
+                        browse
+                      </button>
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {referenceAttachments.map((r) => (
+                      <li
+                        key={r.id}
+                        className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 py-1.5 pl-1.5 pr-2"
+                      >
+                        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-muted">
+                          {r.previewUrl ? (
+                            <img src={r.previewUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                              <Film className="h-5 w-5" aria-hidden />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-foreground">{r.file.name}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {(r.file.size / 1024).toFixed(0)} KB
+                            {r.file.type ? ` · ${r.file.type}` : ''}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                          disabled={isStartingJob}
+                          onClick={() => removeReferenceAttachment(r.id)}
+                          aria-label={`Remove ${r.file.name}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                    {referenceFileLimit != null &&
+                      referenceFileLimit > 0 &&
+                      referenceAttachments.length < referenceFileLimit && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-full border-dashed"
+                        disabled={isStartingJob || missingKey}
+                        onClick={() => referenceFileInputRef.current?.click()}
+                      >
+                        <Paperclip className="mr-1.5 h-3.5 w-3.5" />
+                        Add more
+                      </Button>
+                    )}
+                  </ul>
+                )}
+              </div>
+            </div>
+            )}
+
+            {showDurationControl && uiModel?.durationOptions && (
+              <div className="shrink-0 space-y-2">
+                <Label className="text-foreground/90">Duration</Label>
+                <Select value={videoDuration} onValueChange={setVideoDuration} disabled={isStartingJob}>
+                  <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
+                    <SelectValue placeholder="Select duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uiModel.durationOptions.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {showAspectRatioControl && aspectChoices.length > 0 && (
+              <div className="shrink-0 space-y-2">
+                <Label className="text-foreground/90">Aspect ratio</Label>
+                <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={isStartingJob}>
+                  <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {aspectChoices.map((ar) => (
+                      <SelectItem key={ar} value={ar}>
+                        {ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="shrink-0 gap-2 border-t border-border bg-muted/10 px-5 py-3 sm:px-6 sm:gap-0">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isStartingJob}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => void handleSubmit()} disabled={isStartingJob || missingKey || videoSubmitBlocked}>
+            {isStartingJob
+              ? 'Starting…'
+              : libraryOnly
+                ? 'Generate & add to library'
+                : 'Generate & add to timeline'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

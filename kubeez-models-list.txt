@@ -1,0 +1,118 @@
+﻿# Kubeez models — GET https://api.kubeez.com/v1/models
+# Generated: 2026-03-28 09:54:18 +02:00
+
+total_count: 112
+
+model_id	model_type	display_name	provider	cost_per_generation
+ad-copy	image	Ad Copy	Kubeez	50.0
+flux-2-1K	image	Flux 2 1K	Black Forest Labs	10.0
+flux-2-2K	image	Flux 2 2K	Black Forest Labs	13.0
+flux-2-edit-1K	image	Flux 2 Edit 1K	Black Forest Labs	10.0
+flux-2-edit-2K	image	Flux 2 Edit 2K	Black Forest Labs	13.0
+gpt-1.5-image-high	image	GPT 1.5 Image High Quality	OpenAI	32.0
+gpt-1.5-image-medium	image	GPT 1.5 Image Medium Quality	OpenAI	10.0
+grok-image-to-image	image	Grok Image-to-Image	xAI	14.0
+grok-text-to-image	image	Grok Text-to-Image	xAI	14.0
+imagen-4	image	Imagen 4	Google	13.0
+imagen-4-fast	image	Imagen 4 Fast	Google	7.0
+imagen-4-ultra	image	Imagen 4 Ultra	Google	19.0
+Logo-maker	image	Logo-maker	Recraft	90.0
+nano-banana	image	Nano Banana	Google	7.0
+nano-banana-2	image	Nano Banana 2	Google	14.0
+nano-banana-2-2K	image	Nano Banana 2 2K	Google	17.0
+nano-banana-2-4K	image	Nano Banana 2 4K	Google	25.0
+nano-banana-edit	image	Nano Banana Edit	Google	7.0
+nano-banana-pro	image	Nano Banana Pro	Google	31.0
+nano-banana-pro-2K	image	Nano Banana Pro 2K	Google	31.0
+nano-banana-pro-4K	image	Nano Banana Pro 4K	Google	41.0
+p-image-edit	image	P Image Edit	Pruna AI	6.0
+qwen-image-to-image	image	Qwen Image Edit	Alibaba	10.0
+qwen-text-to-image	image	Qwen Text-to-Image	Alibaba	10.0
+seedream-v4-5	image	Seedream 4.5	ByteDance	9.0
+5-lite-image-to-image	image	Seedream 5 Lite	ByteDance	12.0
+5-lite-text-to-image	image	Seedream 5 Lite	ByteDance	12.0
+seedream-v4	image	Seedream V4	ByteDance	7.0
+seedream-v4-edit	image	Seedream V4 Edit	ByteDance	7.0
+seedream-v4-5-edit	image	Seedream V4.5 Edit	ByteDance	9.0
+z-image	image	z-image	Alibaba	4.0
+z-image-hd	image	z-image-hd	Alibaba	6.0
+suno-add-instrumental	music	Music add instrumental	Music	19.0
+suno-add-vocals	music	Music add vocals	Music	19.0
+suno-lyrics-generation	music	Music lyrics	Music	2.0
+V4	music	Music V4	Music	19.0
+V4_5	music	Music V4.5	Music	19.0
+V4_5PLUS	music	Music V4.5+	Music	19.0
+V5	music	Music V5	Music	19.0
+V5_5	music	Music V5.5	Music	19.0
+auto-caption	other	Auto Caption	Kubeez	0.5
+mvsep-40	separation	BS Roformer (vocals, instrumental)	MVSEP	6.0
+text-to-dialogue-v3	speech	Text To Dialogue V3	ElevenLabs	21.0
+grok-image-to-video	video	Grok Image-to-Video	xAI	65.0
+grok-text-to-video-6s	video	Grok Text-to-Video (6s)	xAI	65.0
+kling-2-5-image-to-video-pro	video	Kling 2.5 Image-to-Video Pro	Kuaishou	65.0
+kling-2-5-image-to-video-pro-10s	video	Kling 2.5 Image-to-Video Pro 10s	Kuaishou	125.0
+kling-2-6-text-to-video-10s	video	Kling 2.6 (10s, no audio)	Kuaishou	175.0
+kling-2-6-text-to-video-10s-audio	video	Kling 2.6 (10s, with audio)	Kuaishou	310.0
+kling-2-6-text-to-video-5s	video	Kling 2.6 (5s, no audio)	Kuaishou	90.0
+kling-2-6-text-to-video-5s-audio	video	Kling 2.6 (5s, with audio)	Kuaishou	175.0
+kling-2-6-image-to-video-10s	video	Kling 2.6 I2V (10s)	Kuaishou	175.0
+kling-2-6-image-to-video-10s-audio	video	Kling 2.6 I2V (10s, Audio)	Kuaishou	310.0
+kling-2-6-image-to-video-5s	video	Kling 2.6 I2V (5s)	Kuaishou	90.0
+kling-2-6-image-to-video-5s-audio	video	Kling 2.6 I2V (5s, Audio)	Kuaishou	175.0
+kling-2-6-motion-control-720p	video	Kling 2.6 Motion	Kuaishou	270.0
+kling-2-6-motion-control-1080p	video	Kling 2.6 Motion Pro	Kuaishou	360.0
+kling-3-0-std	video	Kling 3.0	Kuaishou	105.0
+kling-3-0-motion-control-720p	video	Kling 3.0 Motion	Kuaishou	720.0
+kling-3-0-motion-control-1080p	video	Kling 3.0 Motion Pro	Kuaishou	960.0
+kling-3-0-pro	video	Kling 3.0 Pro	Kuaishou	125.0
+v1-pro-fast-i2v-1080p-10s	video	Seedance 1.0	ByteDance	130.0
+v1-pro-fast-i2v-1080p-5s	video	Seedance 1.0	ByteDance	80.0
+v1-pro-fast-i2v-720p-10s	video	Seedance 1.0	ByteDance	80.0
+v1-pro-fast-i2v-720p-5s	video	Seedance 1.0	ByteDance	40.0
+seedance-1-5-pro-1080p-12s	video	Seedance 1.5 Pro	ByteDance	156.0
+seedance-1-5-pro-1080p-12s-audio	video	Seedance 1.5 Pro	ByteDance	312.0
+seedance-1-5-pro-1080p-4s	video	Seedance 1.5 Pro	ByteDance	39.0
+seedance-1-5-pro-1080p-4s-audio	video	Seedance 1.5 Pro	ByteDance	78.0
+seedance-1-5-pro-1080p-8s	video	Seedance 1.5 Pro	ByteDance	78.0
+seedance-1-5-pro-1080p-8s-audio	video	Seedance 1.5 Pro	ByteDance	156.0
+seedance-1-5-pro-480p-12s	video	Seedance 1.5 Pro	ByteDance	48.0
+seedance-1-5-pro-480p-12s-audio	video	Seedance 1.5 Pro	ByteDance	58.0
+seedance-1-5-pro-480p-4s	video	Seedance 1.5 Pro	ByteDance	12.0
+seedance-1-5-pro-480p-4s-audio	video	Seedance 1.5 Pro	ByteDance	24.0
+seedance-1-5-pro-480p-8s	video	Seedance 1.5 Pro	ByteDance	24.0
+seedance-1-5-pro-480p-8s-audio	video	Seedance 1.5 Pro	ByteDance	48.0
+seedance-1-5-pro-720p-12s	video	Seedance 1.5 Pro	ByteDance	76.0
+seedance-1-5-pro-720p-12s-audio	video	Seedance 1.5 Pro	ByteDance	152.0
+seedance-1-5-pro-720p-4s	video	Seedance 1.5 Pro	ByteDance	19.0
+seedance-1-5-pro-720p-4s-audio	video	Seedance 1.5 Pro	ByteDance	38.0
+seedance-1-5-pro-720p-8s	video	Seedance 1.5 Pro	ByteDance	38.0
+seedance-1-5-pro-720p-8s-audio	video	Seedance 1.5 Pro	ByteDance	76.0
+sora-2-image-to-video-10s	video	Sora 2 Image-to-Video (10s)	OpenAI	75.0
+sora-2-image-to-video-15s	video	Sora 2 Image-to-Video (15s)	OpenAI	85.0
+sora-2-pro-image-to-video-10s-hd	video	Sora 2 Pro Image-to-Video (10s HD)	OpenAI	475.0
+sora-2-pro-image-to-video-10s-standard	video	Sora 2 Pro Image-to-Video (10s Standard)	OpenAI	225.0
+sora-2-pro-image-to-video-15s-hd	video	Sora 2 Pro Image-to-Video (15s HD)	OpenAI	790.0
+sora-2-pro-image-to-video-15s-standard	video	Sora 2 Pro Image-to-Video (15s Standard)	OpenAI	390.0
+sora-2-pro-storyboard-10s	video	Sora 2 Pro Storyboard 10s	OpenAI	245.0
+sora-2-pro-storyboard-15s	video	Sora 2 Pro Storyboard 15s	OpenAI	390.0
+sora-2-pro-storyboard-25s	video	Sora 2 Pro Storyboard 25s	OpenAI	445.0
+sora-2-pro-text-to-video-10s-hd	video	Sora 2 Pro Text-to-Video (10s HD)	OpenAI	475.0
+sora-2-pro-text-to-video-10s-standard	video	Sora 2 Pro Text-to-Video (10s Standard)	OpenAI	225.0
+sora-2-pro-text-to-video-15s-hd	video	Sora 2 Pro Text-to-Video (15s HD)	OpenAI	790.0
+sora-2-pro-text-to-video-15s-standard	video	Sora 2 Pro Text-to-Video (15s Standard)	OpenAI	390.0
+sora-2-text-to-video-10s	video	Sora 2 Text-to-Video (10s)	OpenAI	75.0
+sora-2-text-to-video-15s	video	Sora 2 Text-to-Video (15s)	OpenAI	85.0
+veo3-1-fast-first-and-last-frames	video	Veo 3.1 Fast First-and-Last-Frames	Google	99.0
+veo3-1-fast-reference-to-video	video	Veo 3.1 Fast Reference-to-Video	Google	99.0
+veo3-1-fast-text-to-video	video	Veo 3.1 Fast Text-to-Video	Google	99.0
+veo3-1-first-and-last-frames	video	Veo 3.1 Quality First-and-Last-Frames	Google	390.0
+veo3-1-text-to-video	video	Veo 3.1 Quality Text-to-Video	Google	390.0
+wan-2-5	video	Wan 2.5	Alibaba	155.0
+wan-2-5-image-to-video-10s-1080p	video	Wan 2.5 Image-to-Video (10s 1080p)	Alibaba	310.0
+wan-2-5-image-to-video-10s-720p	video	Wan 2.5 Image-to-Video (10s 720p)	Alibaba	186.0
+wan-2-5-image-to-video-5s-1080p	video	Wan 2.5 Image-to-Video (5s 1080p)	Alibaba	155.0
+wan-2-5-image-to-video-5s-720p	video	Wan 2.5 Image-to-Video (5s 720p)	Alibaba	93.0
+wan-2-5-text-to-video-10s-1080p	video	Wan 2.5 Text-to-Video (10s 1080p)	Alibaba	310.0
+wan-2-5-text-to-video-10s-720p	video	Wan 2.5 Text-to-Video (10s 720p)	Alibaba	186.0
+wan-2-5-text-to-video-5s-1080p	video	Wan 2.5 Text-to-Video (5s 1080p)	Alibaba	155.0
+wan-2-5-text-to-video-5s-720p	video	Wan 2.5 Text-to-Video (5s 720p)	Alibaba	93.0
