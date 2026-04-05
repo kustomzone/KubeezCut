@@ -9,14 +9,15 @@ import {
   InlineSourcePreview,
   InlineCompositionPreview,
   ColorScopesMonitor,
+  PreviewFullscreenButton,
+  PreviewAspectRatioMenu,
+  useFullscreen,
+  useMaskEditorStore,
+  useItemsStore,
 } from '@/features/editor/deps/preview';
-import { PreviewFullscreenButton } from '@/features/preview/components/preview-fullscreen-button';
-import { PreviewAspectRatioMenu } from '@/features/preview/components/preview-aspect-ratio-menu';
-import { useFullscreen } from '@/features/preview/hooks/use-fullscreen';
 import { useTimelineStore } from '@/features/editor/deps/timeline-store';
 import { useProjectStore } from '@/features/editor/deps/projects';
 import { useSettingsStore } from '@/features/editor/deps/settings';
-import { useMaskEditorStore, useItemsStore } from '@/features/editor/deps/preview';
 import { useEditorStore } from '@/shared/state/editor';
 import { EDITOR_LAYOUT_CSS_VALUES, getEditorLayout } from '@/shared/ui/editor-layout';
 import { InteractionLockRegion } from './interaction-lock-region';

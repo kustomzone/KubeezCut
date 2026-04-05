@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EDITOR_LAYOUT_CSS_VALUES } from '@/shared/ui/editor-layout';
-import { useProjectStore } from '@/features/projects/stores/project-store';
+import { useProjectStore } from '@/features/preview/deps/projects';
 import {
   PREVIEW_ASPECT_PRESETS,
   getPreviewAspectKind,
