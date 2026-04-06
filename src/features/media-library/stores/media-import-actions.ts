@@ -5,6 +5,7 @@ import { proxyService } from '../services/proxy-service';
 import { getMimeType } from '../utils/validation';
 import { getSharedProxyKey } from '../utils/proxy-key';
 import { createLogger, createOperationId } from '@/shared/logging/logger';
+import { getFilePickerUnavailableHelp } from '@/shared/utils/browser-file-system-access';
 
 const logger = createLogger('MediaImport');
 
@@ -210,15 +211,9 @@ export function createImportActions(
         return [];
       }
 
-      // Check if File System Access API is supported
-      if (!('showOpenFilePicker' in window)) {
-        const isBrave = 'brave' in navigator;
-        set({
-          error: isBrave
-            ? 'File System Access API is disabled in Brave. Copy the URL below, paste it in your address bar, set the flag to Enabled, and relaunch.'
-            : 'File picker not supported in this browser. Use Chrome or Edge.',
-          errorLink: isBrave ? 'brave://flags/#file-system-access-api' : null,
-        });
+      const fsHelp = getFilePickerUnavailableHelp('openFile');
+      if (fsHelp) {
+        set({ error: fsHelp.message, errorLink: fsHelp.flagUrl });
         return [];
       }
 

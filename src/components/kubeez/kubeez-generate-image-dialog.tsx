@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { KUBEEZCUT_LOGO_URL } from '@/components/brand/kubeez-cut-logo';
+import { KUBEEZ_BRAND_LOGO_URL } from '@/components/brand/kubeez-cut-logo';
 import {
   KubeezGenerateModelsColumn,
   KubeezGeneratePromptField,
@@ -30,14 +30,25 @@ import { usePlaybackStore } from '@/shared/state/playback';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
 import { useMediaLibraryStore } from '@/features/media-library/stores/media-library-store';
 import { runKubeezGenerateJobInBackground } from '@/components/kubeez/kubeez-generate-job-runner';
-import { effectiveMaxReferenceFilesForModel } from '@/infrastructure/kubeez/kubeez-documented-reference-limits';
+import { effectiveMaxReferenceFilesForGenerateDialog } from '@/infrastructure/kubeez/kubeez-documented-reference-limits';
+import {
+  getFileSizeInMB,
+  getMaxFileSizeForModel,
+  isKubeezReferenceFileSizeAllowedForModel,
+  isKubeezReferenceMimeAllowed,
+  KUBEEZ_REFERENCE_FILE_ACCEPT,
+  MAX_INPUT_FILE_SIZE,
+} from '@/infrastructure/kubeez/kubeez-file-restrictions';
+import { getKubeezOfflineBrowseCatalog } from '@/infrastructure/kubeez/kubeez-offline-browse-catalog';
 import {
   FALLBACK_MUSIC_MODELS,
-  FALLBACK_TEXT_TO_IMAGE_MODELS,
   fetchKubeezGroupedMediaModels,
+  filterKubeezCutCatalogModels,
   KUBEEZ_SPEECH_DIALOGUE_MODEL,
   type KubeezMediaModelOption,
 } from '@/infrastructure/kubeez/kubeez-models';
+
+const KUBEEZ_OFFLINE_BROWSE = getKubeezOfflineBrowseCatalog();
 import type { KubeezModelSettings } from '@/infrastructure/kubeez/model-family-registry';
 import {
   getVariantsForBaseCardId,
@@ -45,10 +56,19 @@ import {
   resolveSelectionFromConcreteModelId,
 } from '@/infrastructure/kubeez/model-resolve';
 import {
+  getVideoAspectUi,
+  shouldIncludeVideoAspectRatio,
+  videoAspectRatioForRequest,
+} from '@/infrastructure/kubeez/kubeez-video-aspect-ui';
+import {
   findModelFamilyGridItemForModelId,
   videoModelIdEncodesVariantParams,
 } from '@/infrastructure/kubeez/kubeez-video-model-variants';
-import { KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS, KUBEEZ_DIALOGUE_VOICE_OPTIONS } from '@/infrastructure/kubeez/kubeez-audio-generations';
+import {
+  KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID,
+  KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS,
+  KUBEEZ_DIALOGUE_VOICE_OPTIONS,
+} from '@/infrastructure/kubeez/kubeez-audio-generations';
 import { toast } from 'sonner';
 import { createLogger } from '@/shared/logging/logger';
 import { Film, Paperclip, X } from 'lucide-react';
@@ -87,15 +107,17 @@ export function KubeezGenerateImageDialog({
   const openWasFalse = useRef(true);
 
   const [aspectRatio, setAspectRatio] = useState<string>('1:1');
+  /** Not encoded in `model_id`; kept in dialog state only (see `resolveSelectionFromConcreteModelId`). */
+  const [videoAspectRatio, setVideoAspectRatio] = useState<string | undefined>(undefined);
   const [videoDuration, setVideoDuration] = useState('');
   /** Brief lock while enqueueing a background job (avoid double submit) */
   const [isStartingJob, setIsStartingJob] = useState(false);
-  const [imageModels, setImageModels] = useState<KubeezMediaModelOption[]>(FALLBACK_TEXT_TO_IMAGE_MODELS);
-  const [videoModels, setVideoModels] = useState<KubeezMediaModelOption[]>([]);
-  const [musicModels, setMusicModels] = useState<KubeezMediaModelOption[]>([]);
+  const [imageModels, setImageModels] = useState<KubeezMediaModelOption[]>(KUBEEZ_OFFLINE_BROWSE.imageModels);
+  const [videoModels, setVideoModels] = useState<KubeezMediaModelOption[]>(KUBEEZ_OFFLINE_BROWSE.videoModels);
+  const [musicModels, setMusicModels] = useState<KubeezMediaModelOption[]>(KUBEEZ_OFFLINE_BROWSE.musicModels);
   const [selectedModelId, setSelectedModelId] = useState<string>(DEFAULT_MODEL_ID);
   const [musicInstrumental, setMusicInstrumental] = useState(false);
-  const [dialogueVoice, setDialogueVoice] = useState('Adam');
+  const [dialogueVoice, setDialogueVoice] = useState(KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID);
   const [dialogueLanguage, setDialogueLanguage] = useState('auto');
   const [dialogueStability, setDialogueStability] = useState('0.5');
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -107,17 +129,29 @@ export function KubeezGenerateImageDialog({
   const speechModels = useMemo(() => [KUBEEZ_SPEECH_DIALOGUE_MODEL], []);
 
   const allModels = useMemo(
-    () => [...imageModels, ...videoModels, ...musicModels, ...speechModels],
+    () =>
+      filterKubeezCutCatalogModels([...imageModels, ...videoModels, ...musicModels, ...speechModels]),
     [imageModels, musicModels, speechModels, videoModels]
   );
 
   const allModelsSorted = useMemo(
     () =>
-      [...imageModels, ...videoModels, ...musicModels, ...speechModels].sort((a, b) =>
+      [...allModels].sort((a, b) =>
         a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' })
       ),
-    [imageModels, musicModels, speechModels, videoModels]
+    [allModels]
   );
+
+  useEffect(() => {
+    if (allModels.some((m) => m.model_id === selectedModelId)) return;
+    setSelectedModelId(
+      imageModels.find((m) => m.model_id === DEFAULT_MODEL_ID)?.model_id ??
+        imageModels[0]?.model_id ??
+        videoModels[0]?.model_id ??
+        musicModels[0]?.model_id ??
+        KUBEEZ_SPEECH_DIALOGUE_MODEL.model_id
+    );
+  }, [allModels, imageModels, musicModels, selectedModelId, videoModels]);
 
   const resolvedSelection = useMemo(
     () =>
@@ -218,8 +252,8 @@ export function KubeezGenerateImageDialog({
   );
 
   const selectedModel = useMemo(
-    () => allModels.find((m) => m.model_id === selectedModelId) ?? imageModels[0] ?? allModels[0],
-    [allModels, imageModels, selectedModelId]
+    () => allModels.find((m) => m.model_id === selectedModelId) ?? null,
+    [allModels, selectedModelId]
   );
 
   /** Catalog row for the resolved concrete model (correct limits when a family card applies). */
@@ -229,20 +263,38 @@ export function KubeezGenerateImageDialog({
     if (byResolved) return byResolved;
     const bySelected = allModels.find((m) => m.model_id === selectedModelId);
     if (bySelected) return bySelected;
+    // Never fall back to an image model when a music/speech id is selected but missing from the live list.
+    const musicStub =
+      FALLBACK_MUSIC_MODELS.find((m) => m.model_id === rid) ??
+      FALLBACK_MUSIC_MODELS.find((m) => m.model_id === selectedModelId) ??
+      KUBEEZ_OFFLINE_BROWSE.musicModels.find((m) => m.model_id === rid) ??
+      KUBEEZ_OFFLINE_BROWSE.musicModels.find((m) => m.model_id === selectedModelId);
+    if (musicStub) return musicStub;
+    if (rid === KUBEEZ_SPEECH_DIALOGUE_MODEL.model_id || selectedModelId === KUBEEZ_SPEECH_DIALOGUE_MODEL.model_id) {
+      return KUBEEZ_SPEECH_DIALOGUE_MODEL;
+    }
     return selectedModel ?? undefined;
   }, [allModels, resolvedSelection.resolvedModelId, selectedModelId, selectedModel]);
 
   const isVideoModel = uiModel?.mediaKind === 'video';
   const isMusicModel = uiModel?.mediaKind === 'music';
   const isSpeechModel = uiModel?.mediaKind === 'speech';
-  const showReferenceSection = !isMusicModel && !isSpeechModel;
-
-  const promptFieldGroup = isMusicModel ? 'music' : isSpeechModel ? 'speech' : 'media';
 
   const referenceFileLimit = useMemo(
-    () => effectiveMaxReferenceFilesForModel(uiModel ?? null),
-    [uiModel]
+    () =>
+      effectiveMaxReferenceFilesForGenerateDialog(uiModel ?? null, {
+        resolvedModelId: resolvedSelection.resolvedModelId,
+        baseCardId: resolvedSelection.baseCardId,
+        settings: resolvedSelection.settings,
+      }),
+    [uiModel, resolvedSelection.baseCardId, resolvedSelection.resolvedModelId, resolvedSelection.settings]
   );
+
+  /** Hide entirely when model accepts no reference files (e.g. z-image). Still show when limit is unknown. */
+  const showReferenceSection =
+    !isMusicModel && !isSpeechModel && referenceFileLimit !== 0;
+
+  const promptFieldGroup = isMusicModel ? 'music' : isSpeechModel ? 'speech' : 'media';
 
   const promptMaxChars = useMemo(() => {
     if (!uiModel) return undefined;
@@ -337,6 +389,40 @@ export function KubeezGenerateImageDialog({
   }, [selectedModelId, uiModel?.durationOptions]);
 
   useEffect(() => {
+    if (!isVideoModel) {
+      setVideoAspectRatio(undefined);
+      return;
+    }
+    const ui = getVideoAspectUi(resolvedModelId, {
+      veoMode: resolvedSelection.settings.veo31?.mode,
+    });
+    if (!ui) {
+      setVideoAspectRatio(undefined);
+      return;
+    }
+    if (ui.force16x9) {
+      setVideoAspectRatio('16:9');
+      return;
+    }
+    setVideoAspectRatio((prev) => {
+      const allowed = new Set(ui.options.map((o) => o.value));
+      if (prev === undefined || !allowed.has(prev)) return ui.defaultValue;
+      return prev;
+    });
+  }, [isVideoModel, resolvedModelId, resolvedSelection.settings.veo31?.mode]);
+
+  useEffect(() => {
+    if (referenceFileLimit !== 0) return;
+    setReferenceAttachments((prev) => {
+      if (prev.length === 0) return prev;
+      for (const r of prev) {
+        if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
+      }
+      return [];
+    });
+  }, [referenceFileLimit, selectedModelId]);
+
+  useEffect(() => {
     if (!open) {
       setIsStartingJob(false);
       setReferenceAttachments((prev) => {
@@ -351,12 +437,18 @@ export function KubeezGenerateImageDialog({
 
     const apiKey = kubeezApiKey?.trim() ?? '';
     if (!apiKey) {
-      setImageModels(FALLBACK_TEXT_TO_IMAGE_MODELS);
-      setVideoModels([]);
-      setMusicModels([...FALLBACK_MUSIC_MODELS]);
-      setSelectedModelId((prev) =>
-        FALLBACK_TEXT_TO_IMAGE_MODELS.some((m) => m.model_id === prev) ? prev : DEFAULT_MODEL_ID
-      );
+      setImageModels([...KUBEEZ_OFFLINE_BROWSE.imageModels]);
+      setVideoModels([...KUBEEZ_OFFLINE_BROWSE.videoModels]);
+      setMusicModels([...KUBEEZ_OFFLINE_BROWSE.musicModels]);
+      setSelectedModelId((prev) => {
+        const flat = [
+          ...KUBEEZ_OFFLINE_BROWSE.imageModels,
+          ...KUBEEZ_OFFLINE_BROWSE.videoModels,
+          ...KUBEEZ_OFFLINE_BROWSE.musicModels,
+          KUBEEZ_SPEECH_DIALOGUE_MODEL,
+        ];
+        return flat.some((m) => m.model_id === prev) ? prev : DEFAULT_MODEL_ID;
+      });
       setModelsHint(null);
       setModelsLoading(false);
       return;
@@ -405,7 +497,7 @@ export function KubeezGenerateImageDialog({
         setModelsHint(hints.length > 0 ? hints.join(' ') : null);
 
         setMusicInstrumental(false);
-        setDialogueVoice('Adam');
+        setDialogueVoice(KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID);
         setDialogueLanguage('auto');
         setDialogueStability('0.5');
 
@@ -433,12 +525,17 @@ export function KubeezGenerateImageDialog({
         if (import.meta.env.DEV) {
           logger.debug('Kubeez grouped models fetch failed', e);
         }
-        setImageModels(FALLBACK_TEXT_TO_IMAGE_MODELS);
-        setVideoModels([]);
-        setMusicModels([...FALLBACK_MUSIC_MODELS]);
-        setModelsHint('Could not reach Kubeez. Using built-in image models.');
+        setImageModels([...KUBEEZ_OFFLINE_BROWSE.imageModels]);
+        setVideoModels([...KUBEEZ_OFFLINE_BROWSE.videoModels]);
+        setMusicModels([...KUBEEZ_OFFLINE_BROWSE.musicModels]);
+        setModelsHint('Could not reach Kubeez. Showing the offline catalog; try again when you are online.');
         setSelectedModelId((prev) => {
-          const flat = [...FALLBACK_TEXT_TO_IMAGE_MODELS, ...FALLBACK_MUSIC_MODELS, KUBEEZ_SPEECH_DIALOGUE_MODEL];
+          const flat = [
+            ...KUBEEZ_OFFLINE_BROWSE.imageModels,
+            ...KUBEEZ_OFFLINE_BROWSE.videoModels,
+            ...KUBEEZ_OFFLINE_BROWSE.musicModels,
+            KUBEEZ_SPEECH_DIALOGUE_MODEL,
+          ];
           return flat.some((m) => m.model_id === prev) ? prev : DEFAULT_MODEL_ID;
         });
       })
@@ -558,6 +655,14 @@ export function KubeezGenerateImageDialog({
     const isVideo = uiModel.mediaKind === 'video';
     const baseUrl = kubeezApiBaseUrl?.trim() || undefined;
 
+    const videoAspectUi = isVideo
+      ? getVideoAspectUi(mediaGenModelId, { veoMode: resolved.settings.veo31?.mode })
+      : null;
+    const includeAspectRatioForVideo = shouldIncludeVideoAspectRatio(videoAspectUi, videoAspectRatio);
+    const aspectRatioForMedia = isVideo
+      ? videoAspectRatioForRequest(videoAspectUi, videoAspectRatio)
+      : aspectRatio;
+
     setIsStartingJob(true);
     try {
       const jobId = crypto.randomUUID();
@@ -623,12 +728,14 @@ export function KubeezGenerateImageDialog({
           mediaGenModelId,
           imageVideo: {
             isVideo,
-            aspectRatio,
+            aspectRatio: aspectRatioForMedia,
             videoDuration:
               isVideo && videoDuration && !videoModelIdEncodesVariantParams(mediaGenModelId)
                 ? videoDuration
                 : undefined,
-            includeAspectRatio: !isVideo && uiModel.showAspectRatio !== false,
+            includeAspectRatio: isVideo
+              ? includeAspectRatioForVideo
+              : uiModel.showAspectRatio !== false,
             referenceFiles: referenceAttachments.map((r) => r.file),
           },
           timelinePlacement,
@@ -653,6 +760,7 @@ export function KubeezGenerateImageDialog({
     }
   }, [
     aspectRatio,
+    videoAspectRatio,
     currentProject?.id,
     currentProject?.metadata.height,
     currentProject?.metadata.width,
@@ -678,7 +786,28 @@ export function KubeezGenerateImageDialog({
   ]);
 
   const addReferenceFiles = useCallback((fileList: FileList | File[]) => {
-    const incoming = Array.from(fileList);
+    const raw = Array.from(fileList);
+    const mid = resolvedSelection.resolvedModelId;
+    const allowed = raw.filter(
+      (file) =>
+        isKubeezReferenceMimeAllowed(file) && isKubeezReferenceFileSizeAllowedForModel(file, mid)
+    );
+    const droppedMime = raw.filter((f) => !isKubeezReferenceMimeAllowed(f));
+    const droppedSize = raw.filter(
+      (f) => isKubeezReferenceMimeAllowed(f) && !isKubeezReferenceFileSizeAllowedForModel(f, mid)
+    );
+    if (droppedMime.length > 0) {
+      toast.error('Some files were skipped (type not allowed)', {
+        description: 'Allowed: JPEG, PNG, WebP, MP4, QuickTime, Matroska, or audio files.',
+      });
+    }
+    if (droppedSize.length > 0) {
+      const capBytes = Math.min(getMaxFileSizeForModel(mid, droppedSize[0]?.type), MAX_INPUT_FILE_SIZE);
+      toast.error('Some files were skipped (too large)', {
+        description: `Max ${getFileSizeInMB(capBytes)} MB per file for this model (Kubeez web file limits).`,
+      });
+    }
+    const incoming = allowed;
     if (incoming.length === 0) return;
     setReferenceAttachments((prev) => {
       const cap = referenceFileLimit;
@@ -708,7 +837,7 @@ export function KubeezGenerateImageDialog({
       }));
       return [...prev, ...added];
     });
-  }, [referenceFileLimit]);
+  }, [referenceFileLimit, resolvedSelection.resolvedModelId]);
 
   const removeReferenceAttachment = useCallback((id: string) => {
     setReferenceAttachments((prev) => {
@@ -729,21 +858,26 @@ export function KubeezGenerateImageDialog({
   const referenceHelperText =
     referenceFileLimit === undefined
       ? 'Reference limits follow each model in the Kubeez API/docs. If uploads stay disabled, sync models from your API key or see kubeez.com/docs/rest-api-model-requirements.'
-      : referenceFileLimit === 0
-        ? 'This model does not use reference uploads.'
-        : isVideoModel && uiModel?.supportsImageToVideo
-          ? 'Upload reference frame(s) or clip for image-to-video when required by the model.'
-          : 'Optional for image models — sent as source_media_urls for image-to-image/editing.';
+      : isVideoModel && uiModel?.supportsImageToVideo
+        ? 'Upload reference frame(s) or clip for image-to-video when required by the model.'
+        : 'Optional for image models — sent as source_media_urls for image-to-image/editing.';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(92vh,900px)] w-[min(98vw,80rem)] max-w-[min(98vw,80rem)] flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 shadow-2xl shadow-black/50 sm:rounded-2xl">
-        <div className="shrink-0 border-b border-border/60 bg-gradient-to-r from-muted/40 via-muted/20 to-transparent px-5 py-4 sm:px-6">
+      <DialogContent
+        overlayClassName="duration-300 ease-out motion-reduce:duration-100"
+        className="flex max-h-[min(94vh,920px)] w-[min(98vw,92rem)] max-w-[min(98vw,92rem)] flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 shadow-2xl shadow-black/50 sm:rounded-2xl
+          duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
+          data-[state=open]:zoom-in-[0.98] data-[state=closed]:zoom-out-[0.98]
+          data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-3
+          motion-reduce:duration-150 motion-reduce:data-[state=open]:slide-in-from-bottom-0 motion-reduce:data-[state=closed]:slide-out-to-bottom-0 motion-reduce:data-[state=open]:zoom-in-100 motion-reduce:data-[state=closed]:zoom-out-100"
+      >
+        <div className="shrink-0 border-b border-border/60 bg-gradient-to-r from-muted/40 via-muted/20 to-transparent px-4 py-3 sm:px-5">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/90 p-1.5 shadow-inner shadow-black/20">
               <img
-                src={KUBEEZCUT_LOGO_URL}
-                alt=""
+                src={KUBEEZ_BRAND_LOGO_URL}
+                alt="Kubeez"
                 width={36}
                 height={36}
                 decoding="async"
@@ -769,7 +903,7 @@ export function KubeezGenerateImageDialog({
           </div>
         </div>
 
-        <div className="flex min-h-[min(52vh,420px)] flex-1 flex-col gap-4 overflow-hidden px-5 py-4 sm:px-6 lg:min-h-0 lg:flex-row lg:gap-0">
+        <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden px-4 py-3 sm:px-5 lg:flex-row">
           <KubeezGenerateModelsColumn
             missingKey={missingKey}
             modelsHint={modelsHint}
@@ -778,7 +912,6 @@ export function KubeezGenerateImageDialog({
             musicModels={musicModels}
             speechModels={speechModels}
             allModelsSorted={allModelsSorted}
-            allModelsCount={allModels.length}
             modelTab={modelTab}
             onModelTabChange={setModelTab}
             selectedModelId={selectedModelId}
@@ -787,13 +920,16 @@ export function KubeezGenerateImageDialog({
             modelsLoading={modelsLoading}
           />
 
-          <div className="flex flex-1 flex-col gap-5 overflow-y-auto lg:min-h-0 lg:pl-6">
+          <div className="mt-4 flex min-h-0 w-full flex-col gap-3 overflow-y-auto border-t border-border/50 pt-4 [scrollbar-gutter:stable] lg:mt-0 lg:w-[min(100%,24rem)] lg:flex-none lg:shrink-0 lg:self-stretch lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
             <KubeezGenerateSelectedModelPanel
               model={uiModel ?? null}
               selectedModelId={selectedModelId}
+              resolvedModelId={resolvedSelection.resolvedModelId}
               onSelectModelId={setSelectedModelId}
               modelSettings={resolvedSelection.settings}
               onPatchModelSettings={patchModelSettings}
+              videoAspectRatio={videoAspectRatio}
+              onVideoAspectRatioChange={setVideoAspectRatio}
               modelFamilyItem={modelFamilyForSelection}
               videoFooterHint={videoFooterHint}
               busy={isStartingJob}
@@ -883,7 +1019,7 @@ export function KubeezGenerateImageDialog({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label className="text-foreground/90">{referenceLabel}</Label>
                 <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {referenceFileLimit === undefined || referenceFileLimit <= 0
+                  {referenceFileLimit === undefined
                     ? '—'
                     : `${referenceAttachments.length}/${referenceFileLimit}`}
                 </span>
@@ -893,13 +1029,12 @@ export function KubeezGenerateImageDialog({
                 ref={referenceFileInputRef}
                 type="file"
                 className="sr-only"
-                accept="image/*,video/*,audio/*"
+                accept={KUBEEZ_REFERENCE_FILE_ACCEPT}
                 multiple
                 disabled={
                   isStartingJob ||
                   missingKey ||
                   referenceFileLimit === undefined ||
-                  referenceFileLimit <= 0 ||
                   (referenceFileLimit > 0 && referenceAttachments.length >= referenceFileLimit)
                 }
                 onChange={(e) => {
@@ -916,17 +1051,14 @@ export function KubeezGenerateImageDialog({
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (isStartingJob || missingKey || referenceFileLimit === undefined || referenceFileLimit <= 0) return;
+                  if (isStartingJob || missingKey || referenceFileLimit === undefined) return;
                   const files = e.dataTransfer.files;
                   if (files?.length) addReferenceFiles(files);
                 }}
                 className={cn(
                   'rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3 transition-colors',
                   'hover:border-border hover:bg-muted/25',
-                  (isStartingJob ||
-                    missingKey ||
-                    referenceFileLimit === undefined ||
-                    referenceFileLimit <= 0) &&
+                  (isStartingJob || missingKey || referenceFileLimit === undefined) &&
                     'pointer-events-none opacity-50'
                 )}
               >
@@ -939,10 +1071,7 @@ export function KubeezGenerateImageDialog({
                         type="button"
                         className="font-medium text-primary underline-offset-2 hover:underline"
                         disabled={
-                          isStartingJob ||
-                          missingKey ||
-                          referenceFileLimit === undefined ||
-                          referenceFileLimit <= 0
+                          isStartingJob || missingKey || referenceFileLimit === undefined
                         }
                         onClick={() => referenceFileInputRef.current?.click()}
                       >
@@ -1045,7 +1174,7 @@ export function KubeezGenerateImageDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-border bg-muted/10 px-5 py-3 sm:px-6 sm:gap-0">
+        <DialogFooter className="shrink-0 gap-2 border-t border-border bg-muted/10 px-4 py-2.5 sm:px-5 sm:gap-0">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isStartingJob}>
             Cancel
           </Button>

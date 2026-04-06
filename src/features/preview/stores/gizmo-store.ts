@@ -111,7 +111,8 @@ interface GizmoStoreActions {
     itemId: string,
     startPoint: Point,
     transform: Transform,
-    strokeWidth?: number
+    strokeWidth?: number,
+    mediaViewportInLayer?: { x: number; y: number; width: number; height: number },
   ) => void;
 
   /** Start scale interaction (drag handle to resize) */
@@ -122,7 +123,8 @@ interface GizmoStoreActions {
     transform: Transform,
     itemType?: 'video' | 'audio' | 'image' | 'text' | 'shape' | 'adjustment' | 'composition',
     aspectRatioLocked?: boolean,
-    strokeWidth?: number
+    strokeWidth?: number,
+    mediaViewportInLayer?: { x: number; y: number; width: number; height: number },
   ) => void;
 
   /** Start rotate interaction (drag rotation handle) */
@@ -130,7 +132,8 @@ interface GizmoStoreActions {
     itemId: string,
     startPoint: Point,
     transform: Transform,
-    strokeWidth?: number
+    strokeWidth?: number,
+    mediaViewportInLayer?: { x: number; y: number; width: number; height: number },
   ) => void;
 
   /** Update interaction with current mouse position */
@@ -207,7 +210,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
     setSnappingEnabled: (enabled) =>
       set({ snappingEnabled: enabled }),
 
-    startTranslate: (itemId, startPoint, transform, strokeWidth) =>
+    startTranslate: (itemId, startPoint, transform, strokeWidth, mediaViewportInLayer) =>
       set({
         activeGizmo: {
           mode: 'translate',
@@ -220,12 +223,13 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           altKey: false,
           itemId,
           strokeWidth,
+          mediaViewportInLayer,
         },
         previewTransform: { ...transform },
         snapLines: [],
       }),
 
-    startScale: (itemId, handle, startPoint, transform, itemType, aspectRatioLocked, strokeWidth) =>
+    startScale: (itemId, handle, startPoint, transform, itemType, aspectRatioLocked, strokeWidth, mediaViewportInLayer) =>
       set({
         activeGizmo: {
           mode: 'scale',
@@ -240,12 +244,13 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           itemType,
           aspectRatioLocked,
           strokeWidth,
+          mediaViewportInLayer,
         },
         previewTransform: { ...transform },
         snapLines: [],
       }),
 
-    startRotate: (itemId, startPoint, transform, strokeWidth) =>
+    startRotate: (itemId, startPoint, transform, strokeWidth, mediaViewportInLayer) =>
       set({
         activeGizmo: {
           mode: 'rotate',
@@ -258,6 +263,7 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
           altKey: false,
           itemId,
           strokeWidth,
+          mediaViewportInLayer,
         },
         previewTransform: { ...transform },
         snapLines: [],
@@ -300,7 +306,14 @@ export const useGizmoStore = create<GizmoStoreState & GizmoStoreActions>(
       if (snappingEnabled && !altKey && activeGizmo.mode !== 'rotate') {
         const snapResult =
           activeGizmo.mode === 'translate'
-            ? applySnapping(newTransform, canvasSize.width, canvasSize.height, currentSnapLines, strokeExpansion)
+            ? applySnapping(
+              newTransform,
+              canvasSize.width,
+              canvasSize.height,
+              currentSnapLines,
+              strokeExpansion,
+              activeGizmo.mediaViewportInLayer,
+            )
             : applyScaleSnapping(newTransform, canvasSize.width, canvasSize.height, currentSnapLines, strokeExpansion);
         newTransform = snapResult.transform;
         snapLines = snapResult.snapLines;

@@ -15,6 +15,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@kubeez-website': path.resolve(__dirname, './KubeezWebsite/src'),
     },
   },
 });

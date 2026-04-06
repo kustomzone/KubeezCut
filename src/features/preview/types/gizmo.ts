@@ -72,6 +72,11 @@ export interface GizmoState {
   aspectRatioLocked?: boolean;
   /** Stroke width for snapping expansion (shapes with strokes) */
   strokeWidth?: number;
+  /**
+   * For video/image with contain-fit, the visible pixel rect inside the layer box
+   * (same geometry as the crop layout viewport). Used for gizmo placement and translate snap.
+   */
+  mediaViewportInLayer?: { x: number; y: number; width: number; height: number };
 }
 
 /**

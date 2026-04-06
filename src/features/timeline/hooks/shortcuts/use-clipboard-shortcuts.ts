@@ -16,6 +16,7 @@ import { HOTKEY_OPTIONS } from '@/config/hotkeys';
 import type { Transition } from '@/types/transition';
 import { useResolvedHotkeys } from '@/features/timeline/deps/settings';
 import { isCompositionWrapperItem, wouldCreateCompositionCycle } from '../../utils/composition-graph';
+import type { TimelineItem } from '@/types/timeline';
 
 function revealPastedItems(itemIds: readonly string[]): void {
   if (itemIds.length === 0) {
@@ -160,14 +161,17 @@ export function useClipboardShortcuts() {
         const compositionById = useCompositionsStore.getState().compositionById;
         const pasteItems = activeCompositionId === null
           ? itemsClipboard.items
-          : itemsClipboard.items.filter((item) => (
-            !isCompositionWrapperItem(item)
-            || !wouldCreateCompositionCycle({
-              parentCompositionId: activeCompositionId,
-              insertedCompositionId: item.compositionId,
-              compositionById,
-            })
-          ));
+          : itemsClipboard.items.filter((raw) => {
+            const item = raw as TimelineItem;
+            return (
+              !isCompositionWrapperItem(item)
+              || !wouldCreateCompositionCycle({
+                parentCompositionId: activeCompositionId,
+                insertedCompositionId: item.compositionId,
+                compositionById,
+              })
+            );
+          });
         if (pasteItems.length === 0) return;
 
         const findNextAvailableSpace = (
@@ -241,7 +245,7 @@ export function useClipboardShortcuts() {
               : undefined,
           };
 
-          addItem(newItem as Parameters<typeof addItem>[0]);
+          addItem(newItem as TimelineItem);
           usedTrackIds.add(targetTrackId);
         }
 

@@ -80,6 +80,15 @@ const GROUP_ICONS = {
   gif: Film,
 } as const;
 
+function kubeezPendingCategoryForMediaGroup(
+  groupKey: string
+): 'image' | 'video' | 'audio' | null {
+  if (groupKey === 'video') return 'video';
+  if (groupKey === 'audio') return 'audio';
+  if (groupKey === 'image') return 'image';
+  return null;
+}
+
 interface MediaTypeGroupProps {
   groupKey: string;
   label: string;
@@ -96,6 +105,16 @@ const MediaTypeGroup = memo(function MediaTypeGroup({
   groupKey, label, icon, items, isOpen, onToggle, onMediaSelect, viewMode, itemSize,
 }: MediaTypeGroupProps) {
   const Icon = GROUP_ICONS[icon];
+  const currentProjectId = useMediaLibraryStore((s) => s.currentProjectId);
+  const kubeezPendingGenerations = useMediaLibraryStore((s) => s.kubeezPendingGenerations);
+  const pendingExtraCount = useMemo(() => {
+    const cat = kubeezPendingCategoryForMediaGroup(groupKey);
+    if (!currentProjectId || !cat) return 0;
+    return kubeezPendingGenerations.filter(
+      (p) => p.projectId === currentProjectId && p.filterMimeCategory === cat
+    ).length;
+  }, [currentProjectId, groupKey, kubeezPendingGenerations]);
+
   return (
     <Collapsible open={isOpen} onOpenChange={(open) => onToggle(groupKey, open)}>
       <CollapsibleTrigger className="flex items-center gap-2 w-full py-2 hover:bg-secondary/50 rounded-md px-2 -mx-2 transition-colors">
@@ -110,7 +129,7 @@ const MediaTypeGroup = memo(function MediaTypeGroup({
           {label}
         </span>
         <span className="text-[10px] tabular-nums text-muted-foreground/60">
-          {items.length}
+          {items.length + pendingExtraCount}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-1 pb-2">
@@ -119,6 +138,7 @@ const MediaTypeGroup = memo(function MediaTypeGroup({
           onMediaSelect={onMediaSelect}
           viewMode={viewMode}
           itemSize={itemSize}
+          kubeezPendingForCategory={kubeezPendingCategoryForMediaGroup(groupKey)}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -178,6 +198,7 @@ export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaL
   const projectStoreProjectId = useProjectStore((s) => s.currentProject?.id ?? null);
   const proxyStatus = useMediaLibraryStore((s) => s.proxyStatus);
   const proxyProgress = useMediaLibraryStore((s) => s.proxyProgress);
+  const kubeezPendingGenerations = useMediaLibraryStore((s) => s.kubeezPendingGenerations);
   const filteredMediaItems = useFilteredMediaItems();
   const mediaGroups = useMemo(() => {
     const groups: { key: string; label: string; icon: 'video' | 'audio' | 'image' | 'gif'; items: MediaMetadata[] }[] = [];
@@ -195,12 +216,19 @@ export const MediaLibrary = memo(function MediaLibrary({ onMediaSelect }: MediaL
         else images.push(item);
       }
     }
-    if (videos.length > 0) groups.push({ key: 'video', label: 'Videos', icon: 'video', items: videos });
-    if (audio.length > 0) groups.push({ key: 'audio', label: 'Audio', icon: 'audio', items: audio });
-    if (images.length > 0) groups.push({ key: 'image', label: 'Images', icon: 'image', items: images });
+    const pid = currentProjectId;
+    const pendingCount = (cat: 'image' | 'video' | 'audio') =>
+      pid ? kubeezPendingGenerations.filter((p) => p.projectId === pid && p.filterMimeCategory === cat).length : 0;
+    const hasVideoPending = pendingCount('video') > 0;
+    const hasAudioPending = pendingCount('audio') > 0;
+    const hasImagePending = pendingCount('image') > 0;
+
+    if (videos.length > 0 || hasVideoPending) groups.push({ key: 'video', label: 'Videos', icon: 'video', items: videos });
+    if (audio.length > 0 || hasAudioPending) groups.push({ key: 'audio', label: 'Audio', icon: 'audio', items: audio });
+    if (images.length > 0 || hasImagePending) groups.push({ key: 'image', label: 'Images', icon: 'image', items: images });
     if (gifs.length > 0) groups.push({ key: 'gif', label: 'GIFs', icon: 'gif', items: gifs });
     return groups;
-  }, [filteredMediaItems]);
+  }, [filteredMediaItems, currentProjectId, kubeezPendingGenerations]);
   const compositions = useCompositionsStore((s) => s.compositions);
 
   // Composition navigation â€” show banner when inside a sub-comp

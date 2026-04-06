@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { RectangleHorizontal } from 'lucide-react';
+import { RectangleHorizontal, RectangleVertical, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -36,6 +36,13 @@ export function PreviewAspectRatioMenu({
   const currentPreset = PREVIEW_ASPECT_PRESETS.find((p) => p.id === currentKind);
   const triggerLabel = currentPreset?.label ?? `${width}×${height}`;
 
+  const AspectIcon =
+    currentKind === 'vertical'
+      ? RectangleVertical
+      : currentKind === 'square'
+        ? Square
+        : RectangleHorizontal;
+
   const applyPreset = async (presetWidth: number, presetHeight: number) => {
     if (!projectId || busy) return;
     setBusy(true);
@@ -68,7 +75,7 @@ export function PreviewAspectRatioMenu({
             if (e.key === ' ' || e.code === 'Space') e.preventDefault();
           }}
         >
-          <RectangleHorizontal className="w-3.5 h-3.5 shrink-0" />
+          <AspectIcon className="w-3.5 h-3.5 shrink-0" />
           <span className="max-w-[64px] truncate text-[10px] leading-none">
             {triggerLabel}
           </span>

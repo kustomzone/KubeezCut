@@ -26,13 +26,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  RotateCcw, Trash2, Loader2, Check, ImagePlus, Film,
-  Settings2, Rows3, AudioLines, HardDrive,
+  RotateCcw,
+  Trash2,
+  Loader2,
+  Check,
+  ImagePlus,
+  Film,
+  Settings2,
+  Rows3,
+  AudioLines,
+  HardDrive,
+  type LucideIcon,
 } from 'lucide-react';
+import { KUBEEZ_BRAND_LOGO_URL } from '@/components/brand/kubeez-cut-logo';
 import {
   LocalInferenceUnloadControl,
   useSettingsStore,
@@ -65,14 +76,19 @@ import type { MediaTranscriptModel, MediaTranscriptQuantization } from '@/types/
 
 const log = createLogger('SettingsDialog');
 
-const SETTINGS_SECTIONS = [
+type SettingsSectionId = 'general' | 'timeline' | 'kubeez' | 'whisper' | 'storage';
+
+const SETTINGS_SECTIONS: Array<{
+  id: SettingsSectionId;
+  label: string;
+  icon: LucideIcon | 'kubeez';
+}> = [
   { id: 'general', label: 'General', icon: Settings2 },
   { id: 'timeline', label: 'Timeline', icon: Rows3 },
+  { id: 'kubeez', label: 'Kubeez', icon: 'kubeez' },
   { id: 'whisper', label: 'Whisper', icon: AudioLines },
   { id: 'storage', label: 'Storage', icon: HardDrive },
-] as const;
-
-type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
+];
 
 interface SettingsDialogProps {
   open: boolean;
@@ -213,6 +229,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const defaultWhisperModel = useSettingsStore((s) => s.defaultWhisperModel);
   const defaultWhisperQuantization = useSettingsStore((s) => s.defaultWhisperQuantization);
   const defaultWhisperLanguage = useSettingsStore((s) => s.defaultWhisperLanguage);
+  const kubeezApiKey = useSettingsStore((s) => s.kubeezApiKey);
   const setSetting = useSettingsStore((s) => s.setSetting);
   const resetToDefaults = useSettingsStore((s) => s.resetToDefaults);
 
@@ -287,7 +304,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           {/* Sidebar */}
           <nav className="flex w-44 shrink-0 flex-col gap-0.5 border-r border-white/6 p-2">
             {SETTINGS_SECTIONS.map((section) => {
-              const Icon = section.icon;
+              const Icon = section.icon === 'kubeez' ? null : section.icon;
               return (
                 <button
                   key={section.id}
@@ -300,7 +317,15 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                       : 'text-muted-foreground hover:bg-white/5 hover:text-foreground/80'
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {section.icon === 'kubeez' ? (
+                    <img
+                      src={KUBEEZ_BRAND_LOGO_URL}
+                      alt=""
+                      className="h-3.5 w-3.5 shrink-0 object-contain"
+                    />
+                  ) : (
+                    Icon && <Icon className="h-3.5 w-3.5 shrink-0" />
+                  )}
                   {section.label}
                 </button>
               );
@@ -371,6 +396,35 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 </div>
               )}
 
+              {activeSection === 'kubeez' && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={KUBEEZ_BRAND_LOGO_URL}
+                      alt="Kubeez"
+                      className="h-9 w-auto max-w-[min(100%,200px)] object-contain object-left"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm" htmlFor="editor-settings-kubeez-api-key">
+                      API key
+                    </Label>
+                    <Input
+                      id="editor-settings-kubeez-api-key"
+                      type="password"
+                      autoComplete="off"
+                      placeholder="Paste your Kubeez API key"
+                      value={kubeezApiKey}
+                      onChange={(e) => setSetting('kubeezApiKey', e.target.value)}
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Required for Kubeez media generation in the editor. Stored in this browser&apos;s local storage only.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {activeSection === 'timeline' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -437,7 +491,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Pick based on memory first. {defaultWhisperQuantizationOption.description}
+                      Pick based on memory first. {defaultWhisperQuantizationOption?.description ?? ''}
                     </p>
                   </div>
 

@@ -41,7 +41,23 @@ export function clampTrimAmount(
   let clampedAmount = trimAmount;
   let maxExtend: number | null = null;
 
-  if (isMediaItem(item)) {
+  if (item.type === 'composition') {
+    const subComp = useCompositionsStore.getState().getComposition(item.compositionId);
+    if (subComp) {
+      const maxDuration = subComp.durationInFrames;
+      if (handle === 'end') {
+        if (item.durationInFrames + trimAmount > maxDuration) {
+          clampedAmount = maxDuration - item.durationInFrames;
+          maxExtend = maxDuration - item.durationInFrames;
+        }
+      } else {
+        if (trimAmount < 0 && item.durationInFrames - trimAmount > maxDuration) {
+          clampedAmount = -(maxDuration - item.durationInFrames);
+          maxExtend = maxDuration - item.durationInFrames;
+        }
+      }
+    }
+  } else if (isMediaItem(item)) {
     const { sourceStart, sourceDuration, sourceFps, speed } = getSourceProperties(item);
     const effectiveSourceFps = sourceFps ?? timelineFps;
 
@@ -63,24 +79,6 @@ export function clampTrimAmount(
 
         if (item.durationInFrames + trimAmount > maxDuration) {
           clampedAmount = maxDuration - item.durationInFrames;
-        }
-      }
-    }
-  } else if (item.type === 'composition') {
-    const subComp = useCompositionsStore.getState().getComposition(item.compositionId);
-    if (subComp) {
-      const maxDuration = subComp.durationInFrames;
-      if (handle === 'end') {
-        // End handle: positive trimAmount = extending right
-        if (item.durationInFrames + trimAmount > maxDuration) {
-          clampedAmount = maxDuration - item.durationInFrames;
-          maxExtend = maxDuration - item.durationInFrames;
-        }
-      } else {
-        // Start handle: negative trimAmount = extending left
-        if (trimAmount < 0 && item.durationInFrames - trimAmount > maxDuration) {
-          clampedAmount = -(maxDuration - item.durationInFrames);
-          maxExtend = maxDuration - item.durationInFrames;
         }
       }
     }

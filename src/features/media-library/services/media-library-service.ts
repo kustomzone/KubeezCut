@@ -565,6 +565,106 @@ class MediaLibraryService {
   }
 
   /**
+   * Save a generated video (e.g. Kubeez image-to-video) into the project media library.
+   */
+  async importGeneratedVideo(
+    file: File,
+    projectId: string,
+    options?: {
+      tags?: string[];
+      thumbnailMaxSize?: number;
+      thumbnailQuality?: number;
+      codec?: string;
+    }
+  ): Promise<MediaMetadata> {
+    if (!projectId) {
+      throw new Error('No project selected');
+    }
+
+    const resolvedMimeType = file.type || getMimeType(file);
+    if (!resolvedMimeType.startsWith('video/')) {
+      throw new Error(`Generated file must be a video. Received "${resolvedMimeType}".`);
+    }
+
+    const thumbnailMaxSize = options?.thumbnailMaxSize ?? 320;
+    const thumbnailQuality = options?.thumbnailQuality ?? 0.6;
+    const { metadata, thumbnail } = await mediaProcessorService.processMedia(file, resolvedMimeType, {
+      generateThumbnail: true,
+      thumbnailMaxSize,
+      thumbnailQuality,
+      thumbnailTimestamp: 1,
+    });
+
+    if (metadata.type !== 'video') {
+      throw new Error(`Expected generated video metadata, received "${metadata.type}".`);
+    }
+
+    const mediaId = crypto.randomUUID();
+    const createdAt = Date.now();
+    const opfsPath = `content/${mediaId.slice(0, 2)}/${mediaId.slice(2, 4)}/${mediaId}/data`;
+    const codec = options?.codec ?? metadata.codec ?? resolvedMimeType.split('/')[1] ?? 'unknown';
+    const thumbW = thumbnailMaxSize;
+    const thumbH = Math.max(1, Math.round(thumbW * (metadata.height / Math.max(1, metadata.width))));
+
+    const mediaMetadata: MediaMetadata = {
+      id: mediaId,
+      storageType: 'opfs',
+      opfsPath,
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: resolvedMimeType,
+      duration: metadata.duration,
+      width: metadata.width,
+      height: metadata.height,
+      fps: metadata.fps,
+      codec,
+      bitrate: metadata.bitrate ?? 0,
+      audioCodec: metadata.audioCodec,
+      audioCodecSupported: metadata.audioCodecSupported,
+      keyframeTimestamps: metadata.keyframeTimestamps,
+      gopInterval: metadata.gopInterval,
+      tags: options?.tags ?? [],
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    return persistGeneratedMediaAsset({
+      file,
+      projectId,
+      mediaMetadata,
+      thumbnailBlob: thumbnail,
+      thumbnailWidth: thumbnail ? thumbW : undefined,
+      thumbnailHeight: thumbnail ? thumbH : undefined,
+    });
+  }
+
+  /**
+   * Import generated image, audio, or video from a `File` (mime-based dispatch).
+   */
+  async importGeneratedMedia(
+    file: File,
+    projectId: string,
+    options?: {
+      tags?: string[];
+      thumbnailMaxSize?: number;
+      thumbnailQuality?: number;
+      codec?: string;
+    }
+  ): Promise<MediaMetadata> {
+    const mime = file.type || getMimeType(file);
+    if (mime.startsWith('image/')) {
+      return this.importGeneratedImage(file, projectId, options);
+    }
+    if (mime.startsWith('audio/')) {
+      return this.importGeneratedAudio(file, projectId, options);
+    }
+    if (mime.startsWith('video/')) {
+      return this.importGeneratedVideo(file, projectId, options);
+    }
+    throw new Error(`Unsupported generated media MIME type: ${mime}`);
+  }
+
+  /**
    * Delete media from a project with reference counting
    *
    * Removes the media association from the project. If no other projects

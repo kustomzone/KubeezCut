@@ -17,7 +17,7 @@ describe('editor-store', () => {
       activePanel: null,
       leftSidebarOpen: true,
       rightSidebarOpen: true,
-      keyframeEditorOpen: false,
+      lastLibraryTab: 'media',
       activeTab: 'media',
       clipInspectorTab: 'video',
       sidebarWidth: editorLayout.leftSidebarDefaultWidth,
@@ -38,8 +38,8 @@ describe('editor-store', () => {
     expect(state.activePanel).toBe(null);
     expect(state.leftSidebarOpen).toBe(true);
     expect(state.rightSidebarOpen).toBe(true);
-    expect(state.keyframeEditorOpen).toBe(false);
     expect(state.activeTab).toBe('media');
+    expect(state.lastLibraryTab).toBe('media');
     expect(state.clipInspectorTab).toBe('video');
     expect(state.sourcePreviewMediaId).toBe(null);
     expect(state.mediaSkimPreviewMediaId).toBe(null);
@@ -80,15 +80,28 @@ describe('editor-store', () => {
 
   it('opens the keyframe editor and reveals the left sidebar', () => {
     useEditorStore.getState().setLeftSidebarOpen(false);
-    expect(useEditorStore.getState().keyframeEditorOpen).toBe(false);
+    expect(useEditorStore.getState().activeTab).toBe('media');
 
     useEditorStore.getState().toggleKeyframeEditorOpen();
 
-    expect(useEditorStore.getState().keyframeEditorOpen).toBe(true);
+    expect(useEditorStore.getState().activeTab).toBe('keyframes');
+    expect(useEditorStore.getState().lastLibraryTab).toBe('media');
     expect(useEditorStore.getState().leftSidebarOpen).toBe(true);
 
     useEditorStore.getState().setKeyframeEditorOpen(false);
-    expect(useEditorStore.getState().keyframeEditorOpen).toBe(false);
+    expect(useEditorStore.getState().activeTab).toBe('media');
+  });
+
+  it('restores the previous library tab when closing the keyframe editor', () => {
+    useEditorStore.getState().setActiveTab('shapes');
+    expect(useEditorStore.getState().activeTab).toBe('shapes');
+
+    useEditorStore.getState().toggleKeyframeEditorOpen();
+    expect(useEditorStore.getState().activeTab).toBe('keyframes');
+    expect(useEditorStore.getState().lastLibraryTab).toBe('shapes');
+
+    useEditorStore.getState().toggleKeyframeEditorOpen();
+    expect(useEditorStore.getState().activeTab).toBe('shapes');
   });
 
   it('sets active tab', () => {

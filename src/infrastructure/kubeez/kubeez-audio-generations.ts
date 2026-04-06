@@ -1,20 +1,18 @@
+import { rewriteKubeezMediaCdnUrlForFetch } from '@/infrastructure/kubeez/kubeez-cdn-fetch-url';
+import { extractKubeezPollStatus, isKubeezPlainObject } from '@/infrastructure/kubeez/kubeez-poll-status';
 import { createLogger } from '@/shared/logging/logger';
+import { DEFAULT_VOICE_ID, TEXT_TO_DIALOGUE_VOICES } from '@kubeez-website/data/textToDialogueVoices';
 import { resolveKubeezApiBaseUrl } from './kubeez-text-to-image';
 
 const logger = createLogger('KubeezAudio');
 
-/** Voice ids accepted by Kubeez `POST /v1/generate/dialogue` (ElevenLabs). */
-export const KUBEEZ_DIALOGUE_VOICE_OPTIONS: { id: string; label: string }[] = [
-  { id: 'Adam', label: 'Adam' },
-  { id: 'Sarah', label: 'Sarah' },
-  { id: 'Antoni', label: 'Antoni' },
-  { id: 'Arnold', label: 'Arnold' },
-  { id: 'Bella', label: 'Bella' },
-  { id: 'Domi', label: 'Domi' },
-  { id: 'Elli', label: 'Elli' },
-  { id: 'Josh', label: 'Josh' },
-  { id: 'Sam', label: 'Sam' },
-];
+/** Voice ids/labels aligned with KubeezWebsite `textToDialogueVoices.ts` (Kie ElevenLabs dialogue v3). */
+export const KUBEEZ_DIALOGUE_VOICE_OPTIONS: { id: string; label: string }[] = TEXT_TO_DIALOGUE_VOICES.map(
+  ({ id, label }) => ({ id, label })
+);
+
+/** Default voice id for speech generation (first entry in website catalog). */
+export const KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID = DEFAULT_VOICE_ID;
 
 export const KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS: { id: string; label: string }[] = [
   { id: 'auto', label: 'Auto' },
@@ -46,10 +44,6 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       { once: true }
     );
   });
-}
-
-function isPlainObject(u: unknown): u is Record<string, unknown> {
-  return u !== null && typeof u === 'object' && !Array.isArray(u);
 }
 
 function extractGenerationId(data: unknown): string | null {
@@ -91,7 +85,7 @@ function pickUrlDeep(obj: Record<string, unknown>): string | null {
   if (direct) return direct;
   for (const nest of ['file', 'asset', 'media', 'output']) {
     const n = obj[nest];
-    if (isPlainObject(n)) {
+    if (isKubeezPlainObject(n)) {
       const u = pickUrlFromObject(n);
       if (u) return u;
     }
@@ -99,51 +93,13 @@ function pickUrlDeep(obj: Record<string, unknown>): string | null {
   return null;
 }
 
-/** Suno-style `songs[]`: `audio_url` when ready, else `stream_url` (often non-null while `audio_url` is null). */
+/** Music API `songs[]`: `audio_url` when ready, else `stream_url` (often non-null while `audio_url` is null). */
 function pickSongPlaybackUrl(song: Record<string, unknown>): string | null {
   const au = song.audio_url;
   if (typeof au === 'string' && au.length > 0 && isLikelyHttpUrl(au)) return au.trim();
   const su = song.stream_url;
   if (typeof su === 'string' && su.length > 0 && isLikelyHttpUrl(su)) return su.trim();
   return pickUrlDeep(song);
-}
-
-function normalizeStatusString(v: unknown): string {
-  if (typeof v === 'string') return v.toLowerCase().trim();
-  return '';
-}
-
-function extractStatus(data: unknown): string {
-  if (!isPlainObject(data)) return '';
-  const direct =
-    normalizeStatusString(data.status) ||
-    normalizeStatusString(data.state) ||
-    normalizeStatusString(data.job_status) ||
-    normalizeStatusString(data.generation_status);
-  if (direct) return direct;
-
-  const dataNested = data.data;
-  if (isPlainObject(dataNested)) {
-    const s =
-      normalizeStatusString(dataNested.status) ||
-      normalizeStatusString(dataNested.state) ||
-      normalizeStatusString(dataNested.job_status);
-    if (s) return s;
-  }
-
-  const gen = data.generation;
-  if (isPlainObject(gen)) {
-    const s = normalizeStatusString(gen.status) || normalizeStatusString(gen.state);
-    if (s) return s;
-  }
-
-  const job = data.job;
-  if (isPlainObject(job)) {
-    const s = normalizeStatusString(job.status) || normalizeStatusString(job.state);
-    if (s) return s;
-  }
-
-  return '';
 }
 
 function extractErrorMessage(data: unknown): string | undefined {
@@ -171,12 +127,12 @@ async function parseJsonResponse(res: Response): Promise<unknown> {
 }
 
 function collectCandidateRoots(data: unknown): Record<string, unknown>[] {
-  if (!isPlainObject(data)) return [];
+  if (!isKubeezPlainObject(data)) return [];
   const roots: Record<string, unknown>[] = [data];
   const nestedKeys = ['result', 'data', 'generation', 'job', 'payload'] as const;
   for (const k of nestedKeys) {
     const v = data[k];
-    if (isPlainObject(v)) roots.push(v);
+    if (isKubeezPlainObject(v)) roots.push(v);
   }
   return roots;
 }
@@ -202,7 +158,7 @@ function extractAudioUrlFromRoots(roots: Record<string, unknown>[]): string | nu
     const outputs = root.outputs ?? root.media_outputs;
     if (Array.isArray(outputs)) {
       for (const entry of outputs) {
-        if (!isPlainObject(entry)) continue;
+        if (!isKubeezPlainObject(entry)) continue;
         const { url, mediaType } = urlFromOutputEntry(entry);
         consider(url, mediaType, false);
       }
@@ -211,13 +167,13 @@ function extractAudioUrlFromRoots(roots: Record<string, unknown>[]): string | nu
     const songs = root.songs;
     if (Array.isArray(songs)) {
       for (const s of songs) {
-        if (!isPlainObject(s)) continue;
+        if (!isKubeezPlainObject(s)) continue;
         const url = pickSongPlaybackUrl(s);
         consider(url, 'audio/unknown', true);
       }
     }
 
-    if (isPlainObject(root.output)) {
+    if (isKubeezPlainObject(root.output)) {
       const url = pickUrlDeep(root.output);
       const mt =
         typeof root.output.media_type === 'string' ? root.output.media_type.toLowerCase() : '';
@@ -249,14 +205,13 @@ export function audioExtensionFromMime(mime: string): string {
 }
 
 async function downloadAudioUrl(url: string, signal?: AbortSignal): Promise<Blob> {
-  const mediaRes = await fetch(url, { mode: 'cors', signal });
+  const fetchUrl = rewriteKubeezMediaCdnUrlForFetch(url);
+  const mediaRes = await fetch(fetchUrl, { mode: 'cors', signal });
   if (!mediaRes.ok) {
     throw new Error(`Failed to download audio (${mediaRes.status})`);
   }
   return mediaRes.blob();
 }
-
-type AudioJobKind = 'music' | 'dialogue';
 
 export interface KubeezMusicFileResult {
   blob: Blob;
@@ -283,7 +238,7 @@ function collectMusicSongSpecsFromPayload(data: unknown): { url: string; fileBas
     const songs = root.songs;
     if (!Array.isArray(songs)) continue;
     songs.forEach((s, index) => {
-      if (!isPlainObject(s)) return;
+      if (!isKubeezPlainObject(s)) return;
       const url = pickSongPlaybackUrl(s);
       if (!url || seen.has(url)) return;
       seen.add(url);
@@ -325,38 +280,6 @@ async function tryResolveMusicCompletionPayload(
   return null;
 }
 
-function logCompletedAudioMissingUrl(params: {
-  kind: AudioJobKind;
-  generationId: string;
-  /** Last JSON body from the poll endpoint (music, dialogue, or media). */
-  responseBody: unknown;
-  /** True after we switched music polling to unified `GET /v1/generate/media/{id}`. */
-  switchedMusicToMediaPoll: boolean;
-}): void {
-  if (!import.meta.env.DEV) return;
-  const summarize = (label: string, body: unknown) => {
-    if (!isPlainObject(body)) return { label, shape: 'non-object' as const };
-    const o = body;
-    const outs = o.outputs ?? o.media_outputs;
-    const songs = o.songs;
-    return {
-      label,
-      topKeys: Object.keys(o),
-      outputsLen: Array.isArray(outs) ? outs.length : null,
-      songsLen: Array.isArray(songs) ? songs.length : null,
-      hasMediaOutputs: 'media_outputs' in o,
-      hasOutput: 'output' in o,
-      hasSongs: 'songs' in o,
-    };
-  };
-  logger.debug('Kubeez audio completed but no extractable URL', {
-    kind: params.kind,
-    generationId: params.generationId,
-    switchedMusicToMediaPoll: params.switchedMusicToMediaPoll,
-    lastPoll: summarize('lastPoll', params.responseBody),
-  });
-}
-
 async function pollKubeezMusicJob(params: {
   root: string;
   apiKey: string;
@@ -395,11 +318,22 @@ async function pollKubeezMusicJob(params: {
     const statusBody = await parseJsonResponse(statusRes);
 
     if (!statusRes.ok) {
+      // GET /v1/generate/music/{id} or unified /v1/generate/media/{id} may 404 until the job exists.
+      if (statusRes.status === 404) {
+        if (import.meta.env.DEV && attempt % 5 === 0) {
+          logger.debug('Kubeez music poll 404 — status not yet available', {
+            generationId,
+            attempt,
+            pollTail: pollUrl.slice(-48),
+          });
+        }
+        continue;
+      }
       const msg = extractErrorMessage(statusBody) ?? `Status check failed (${statusRes.status})`;
       throw new Error(msg);
     }
 
-    const status = extractStatus(statusBody);
+    const status = extractKubeezPollStatus(statusBody);
     if (import.meta.env.DEV && attempt % 5 === 0) {
       logger.debug('Kubeez music poll', { generationId, status, attempt, pollTail: pollUrl.slice(-48) });
     }
@@ -413,7 +347,10 @@ async function pollKubeezMusicJob(params: {
       status === 'complete' ||
       status === 'success' ||
       status === 'succeeded' ||
-      status === 'streaming';
+      status === 'streaming' ||
+      status === 'ready' ||
+      status === 'done' ||
+      status === 'finished';
 
     if (terminalOk) {
       const resolved = await tryResolveMusicCompletionPayload(statusBody, signal);
@@ -427,17 +364,14 @@ async function pollKubeezMusicJob(params: {
         continue;
       }
 
-      logCompletedAudioMissingUrl({
-        kind: 'music',
-        generationId,
-        responseBody: statusBody,
-        switchedMusicToMediaPoll,
-      });
-      throw new Error(
-        switchedMusicToMediaPoll
-          ? 'Generation completed but no audio URL was returned (music status and unified media status had no downloadable URL).'
-          : 'Generation completed but no audio URL was returned'
-      );
+      if (import.meta.env.DEV && attempt % 5 === 0) {
+        logger.debug('Kubeez music poll — terminal but audio URLs not ready yet', {
+          generationId,
+          attempt,
+          switchedMusicToMediaPoll,
+        });
+      }
+      continue;
     }
   }
 
@@ -472,11 +406,21 @@ async function pollKubeezDialogueJob(params: {
     const statusBody = await parseJsonResponse(statusRes);
 
     if (!statusRes.ok) {
+      if (statusRes.status === 404) {
+        if (import.meta.env.DEV && attempt % 5 === 0) {
+          logger.debug('Kubeez dialogue poll 404 — status not yet available', {
+            generationId,
+            attempt,
+            pollTail: pollUrl.slice(-48),
+          });
+        }
+        continue;
+      }
       const msg = extractErrorMessage(statusBody) ?? `Status check failed (${statusRes.status})`;
       throw new Error(msg);
     }
 
-    const status = extractStatus(statusBody);
+    const status = extractKubeezPollStatus(statusBody);
     if (import.meta.env.DEV && attempt % 5 === 0) {
       logger.debug('Kubeez dialogue poll', { generationId, status, attempt, pollTail: pollUrl.slice(-48) });
     }
@@ -489,7 +433,10 @@ async function pollKubeezDialogueJob(params: {
       status === 'completed' ||
       status === 'complete' ||
       status === 'success' ||
-      status === 'succeeded';
+      status === 'succeeded' ||
+      status === 'ready' ||
+      status === 'done' ||
+      status === 'finished';
 
     if (terminalOk) {
       const audioUrl = firstAudioOutputUrl(statusBody);
@@ -497,13 +444,14 @@ async function pollKubeezDialogueJob(params: {
         return downloadAudioUrl(audioUrl, signal);
       }
 
-      logCompletedAudioMissingUrl({
-        kind: 'dialogue',
-        generationId,
-        responseBody: statusBody,
-        switchedMusicToMediaPoll: triedDialogueMedia404Fallback,
-      });
-      throw new Error('Generation completed but no audio URL was returned');
+      if (import.meta.env.DEV && attempt % 5 === 0) {
+        logger.debug('Kubeez dialogue poll — terminal but no audio URL yet', {
+          generationId,
+          attempt,
+          triedDialogueMedia404Fallback,
+        });
+      }
+      continue;
     }
   }
 

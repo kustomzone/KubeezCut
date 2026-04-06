@@ -7,11 +7,11 @@ describe('pipelined frame loop', () => {
     const closedFrames: number[] = [];
 
     const frameRenderer = {
-      renderFrame: vi.fn(async () => {}),
+      renderFrame: vi.fn(async (_frame: number) => {}),
     };
 
     const videoSource = {
-      add: vi.fn(async (sample: { frame: number }) => {
+      add: vi.fn(async (sample: { frame: number }, _opts?: { keyFrame?: boolean }) => {
         encodedFrames.push(sample.frame);
       }),
     };
@@ -41,7 +41,7 @@ describe('pipelined frame loop', () => {
     expect(encodedFrames).toEqual([0, 1, 2, 3, 4]);
     expect(closedFrames).toEqual([0, 1, 2, 3, 4]);
     expect(videoSource.add).toHaveBeenCalledTimes(5);
-    expect(videoSource.add.mock.calls[0][1]).toEqual({ keyFrame: true });
+    expect(videoSource.add.mock.calls[0]![1]).toEqual({ keyFrame: true });
   });
 
   it('renderFrame overlaps with previous encode', async () => {

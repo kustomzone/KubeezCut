@@ -4,6 +4,7 @@ import { createLogger } from '@/shared/logging/logger';
 
 const logger = createLogger('MediaGrid');
 import { MediaCard } from './media-card';
+import { KubeezPendingGenerationCard } from './kubeez-pending-generation-card';
 import { useMediaLibraryStore, useFilteredMediaItems } from '../stores/media-library-store';
 import type { MediaMetadata } from '@/types/storage';
 import {
@@ -31,16 +32,42 @@ interface MediaGridProps {
   itemSize?: number;
   /** When provided, renders these items instead of pulling from the store */
   items?: MediaMetadata[];
+  /**
+   * When `items` is set (grouped section), filters Kubeez placeholder cards by media kind.
+   * - Omit when `items` is omitted: show all pending jobs for the project (ungrouped grid).
+   * - `'image' | 'video' | 'audio'`: only that kind.
+   * - `null`: never show pending (e.g. GIF-only group).
+   */
+  kubeezPendingForCategory?: 'image' | 'video' | 'audio' | null;
 }
 
-export const MediaGrid = memo(function MediaGrid({ onMediaSelect, viewMode = 'grid', itemSize = 3, items }: MediaGridProps) {
+export const MediaGrid = memo(function MediaGrid({
+  onMediaSelect,
+  viewMode = 'grid',
+  itemSize = 3,
+  items,
+  kubeezPendingForCategory,
+}: MediaGridProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [mediaIdToDelete, setMediaIdToDelete] = useState<string | null>(null);
   const lastSelectedIdRef = useRef<string | null>(null);
 
   const allFilteredItems = useFilteredMediaItems();
   const filteredItems = items ?? allFilteredItems;
+  const currentProjectId = useMediaLibraryStore((s) => s.currentProjectId);
+  const kubeezPendingGenerations = useMediaLibraryStore((s) => s.kubeezPendingGenerations);
   const isLoading = useMediaLibraryStore((s) => s.isLoading);
+
+  const kubeezPendingToShow = useMemo(() => {
+    if (!currentProjectId) return [];
+    const forProject = kubeezPendingGenerations.filter((p) => p.projectId === currentProjectId);
+    const grouped = items !== undefined;
+    if (!grouped) return forProject;
+    if (kubeezPendingForCategory === undefined || kubeezPendingForCategory === null) return [];
+    return forProject.filter((p) => p.filterMimeCategory === kubeezPendingForCategory);
+  }, [currentProjectId, kubeezPendingGenerations, kubeezPendingForCategory, items]);
+
+  const hasGridContent = filteredItems.length > 0 || kubeezPendingToShow.length > 0;
   const selectedMediaIds = useMediaLibraryStore((s) => s.selectedMediaIds);
   const selectedCompositionIds = useMediaLibraryStore((s) => s.selectedCompositionIds);
   const brokenMediaIds = useMediaLibraryStore((s) => s.brokenMediaIds);
@@ -177,7 +204,7 @@ export const MediaGrid = memo(function MediaGrid({ onMediaSelect, viewMode = 'gr
             </div>
           </div>
         </div>
-      ) : !items && filteredItems.length === 0 ? (
+      ) : !items && !hasGridContent ? (
         <div className="flex items-center justify-center py-24">
           <div className="text-center max-w-md">
             <div
@@ -206,6 +233,11 @@ export const MediaGrid = memo(function MediaGrid({ onMediaSelect, viewMode = 'gr
           className={viewMode === 'grid' ? `grid ${GRID_GAP_BY_SIZE[itemSize] ?? GRID_GAP_BY_SIZE[3]}` : 'space-y-1'}
           style={viewMode === 'grid' ? { gridTemplateColumns: `repeat(auto-fill, minmax(min(${GRID_MIN_SIZE_PX[itemSize] ?? GRID_MIN_SIZE_PX[3]}px, 100%), 1fr))` } : undefined}
         >
+          {kubeezPendingToShow.map((pending) => (
+            <div key={pending.id} data-kubeez-pending-wrap={pending.id}>
+              <KubeezPendingGenerationCard pending={pending} viewMode={viewMode} />
+            </div>
+          ))}
           {filteredItems.map((media) => (
             <div
               key={media.id}

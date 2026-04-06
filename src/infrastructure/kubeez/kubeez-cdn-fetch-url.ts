@@ -1,24 +1,82 @@
 /**
- * Kubeez serves final audio/video at media.kubeez.com without CORS headers, so browser `fetch()` fails.
- * Dev (Vite) and production (Vercel) rewrite `/api/kubeez-media/*` to that CDN so requests stay same-origin.
+ * Browser `fetch()` must stay same-origin so Vite (`/api/kubeez`, `/api/kubeez-media`) and Vercel
+ * rewrites apply — same pattern as `resolveKubeezApiBaseUrl` for API calls.
+ * Kubeez often returns absolute `https://api.kubeez.com/...` or `https://media.kubeez.com/...`, or
+ * root-relative `/images/...` that must not hit the dev server root (404).
  */
+
+/** Must match `vite.config` proxy + `vercel.json` rewrites. */
+export const KUBEEZ_API_PROXY_PATH_PREFIX = '/api/kubeez';
 export const KUBEEZ_MEDIA_PROXY_PATH_PREFIX = '/api/kubeez-media';
 
-export function rewriteKubeezMediaCdnUrlForFetch(url: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return url;
-  }
+function pathWithQueryAndHash(u: URL): string {
+  return `${u.pathname}${u.search}${u.hash}`;
+}
 
-  if (parsed.hostname !== 'media.kubeez.com') {
-    return url;
-  }
-
+/**
+ * Rewrites Kubeez production URLs (and dev same-origin proxy URLs) to relative paths that go
+ * through the app proxy — mirrors how we call `POST /api/kubeez/v1/...` instead of `https://api.kubeez.com`.
+ */
+export function rewriteKubeezUrlForSameOriginFetch(url: string): string {
   if (typeof globalThis.window === 'undefined') {
     return url;
   }
 
-  return `${KUBEEZ_MEDIA_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}`;
+  const raw = url.trim();
+  if (!raw) return raw;
+
+  let parsed: URL;
+  try {
+    if (raw.startsWith('//')) {
+      parsed = new URL(`https:${raw}`);
+    } else if (/^https?:\/\//i.test(raw)) {
+      parsed = new URL(raw);
+    } else if (raw.startsWith('/')) {
+      // Root-relative: resolve against the correct Kubeez host, then map to our proxy prefix.
+      if (raw.startsWith(`${KUBEEZ_API_PROXY_PATH_PREFIX}/`) || raw === KUBEEZ_API_PROXY_PATH_PREFIX) {
+        return raw;
+      }
+      if (raw.startsWith(`${KUBEEZ_MEDIA_PROXY_PATH_PREFIX}/`) || raw === KUBEEZ_MEDIA_PROXY_PATH_PREFIX) {
+        return raw;
+      }
+      if (raw.startsWith('/v1/') || raw === '/health') {
+        parsed = new URL(raw, 'https://api.kubeez.com/');
+      } else {
+        parsed = new URL(raw, 'https://media.kubeez.com/');
+      }
+    } else {
+      return url;
+    }
+  } catch {
+    return url;
+  }
+
+  // Already using our dev / prod same-origin proxy — keep as relative path for fetch.
+  try {
+    if (parsed.origin === window.location.origin) {
+      const p = parsed.pathname.replace(/\/$/, '') || '/';
+      if (p === KUBEEZ_API_PROXY_PATH_PREFIX || p.startsWith(`${KUBEEZ_API_PROXY_PATH_PREFIX}/`)) {
+        return pathWithQueryAndHash(parsed);
+      }
+      if (p === KUBEEZ_MEDIA_PROXY_PATH_PREFIX || p.startsWith(`${KUBEEZ_MEDIA_PROXY_PATH_PREFIX}/`)) {
+        return pathWithQueryAndHash(parsed);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  if (parsed.hostname === 'api.kubeez.com') {
+    return `${KUBEEZ_API_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  }
+  if (parsed.hostname === 'media.kubeez.com') {
+    return `${KUBEEZ_MEDIA_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
+  }
+
+  return url;
+}
+
+/** Media / CDN download URLs (images, audio, video files on media.kubeez.com). */
+export function rewriteKubeezMediaCdnUrlForFetch(url: string): string {
+  return rewriteKubeezUrlForSameOriginFetch(url);
 }

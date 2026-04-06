@@ -133,7 +133,17 @@ vi.mock('@/features/editor/deps/timeline-store', () => {
   const useItemsStore = (selector: (state: { maxItemEndFrame: number }) => unknown) =>
     selector({ maxItemEndFrame: 300 });
 
-  return { useTimelineStore, useItemsStore };
+  const useTimelineSettingsStore = Object.assign(
+    (selector: (state: { isTimelineLoading: boolean }) => unknown) =>
+      selector({ isTimelineLoading: false }),
+    {
+      getState: () => ({
+        setTimelineLoading: vi.fn(),
+      }),
+    }
+  );
+
+  return { useTimelineStore, useItemsStore, useTimelineSettingsStore };
 });
 
 vi.mock('@/shared/state/editor-panel-layout-store', () => ({
@@ -154,12 +164,24 @@ vi.mock('@/features/editor/deps/project-bundle', () => ({
 }));
 
 vi.mock('@/features/editor/deps/media-library', () => {
-  const useMediaLibraryStore = Object.assign(() => undefined, {
-    getState: () => ({
-      setCurrentProject: mocks.setMediaProject,
-      loadMediaItems: mocks.loadMediaItems,
-    }),
-  });
+  const useMediaLibraryStore = Object.assign(
+    (
+      selector: (state: {
+        isLoading: boolean;
+        currentProjectId: string | null;
+      }) => unknown
+    ) =>
+      selector({
+        isLoading: false,
+        currentProjectId: 'project-1',
+      }),
+    {
+      getState: () => ({
+        setCurrentProject: mocks.setMediaProject,
+        loadMediaItems: mocks.loadMediaItems,
+      }),
+    }
+  );
 
   return { useMediaLibraryStore };
 });

@@ -247,10 +247,10 @@ vi.mock('@/features/preview/deps/player-core', async () => {
       width?: number;
       height?: number;
       onFrameChange?: (frame: number) => void;
-    } & Record<string, unknown>>
+    }>
   >(({ children, width, height, onFrameChange }, ref) => {
     const [renderTick, setRenderTick] = React.useState(0);
-    const onFrameChangeRef = React.useRef(onFrameChange);
+    const onFrameChangeRef = React.useRef<((frame: number) => void) | undefined>(onFrameChange);
     const safeWidth = Number.isFinite(width) ? Number(width) : 0;
     const safeHeight = Number.isFinite(height) ? Number(height) : 0;
     lastPlayerDimensions = { width: safeWidth, height: safeHeight };
@@ -302,7 +302,7 @@ vi.mock('@/features/preview/deps/player-core', async () => {
       );
     });
 
-    return <div data-testid="mock-player">{syncedChildren}</div>;
+    return <div data-testid="mock-player">{syncedChildren as React.ReactNode}</div>;
   });
   MockPlayer.displayName = 'MockPlayer';
 
@@ -435,12 +435,14 @@ describe('VideoPreview sync behavior', () => {
     createCompositionRendererMock.mockClear();
     rendererMockState.instances.length = 0;
     canvasGetContextSpy?.mockRestore();
-    canvasGetContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((contextId) => {
-      if (contextId === '2d') {
-        return createMockCanvasContext();
-      }
-      return null;
-    });
+    canvasGetContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      ((contextId: string) => {
+        if (contextId === '2d') {
+          return createMockCanvasContext();
+        }
+        return null;
+      }) as typeof HTMLCanvasElement.prototype.getContext
+    );
     localStorage.clear();
     setDocumentVisibility(false);
     resetStores();
@@ -518,6 +520,7 @@ describe('VideoPreview sync behavior', () => {
           currentPoint: { x: 0, y: 0 },
           shiftKey: false,
           ctrlKey: false,
+          altKey: false,
           itemId: 'item-1',
         },
       });
@@ -557,7 +560,7 @@ describe('VideoPreview sync behavior', () => {
             effect: { type: 'gpu-effect', gpuEffectType: 'gpu-sepia', params: { amount: 0.5 } },
           },
         ],
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
 
     render(
@@ -756,7 +759,7 @@ describe('VideoPreview sync behavior', () => {
             },
           },
         ],
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
 
     render(
@@ -830,7 +833,7 @@ describe('VideoPreview sync behavior', () => {
               },
             },
           ],
-        } as TimelineItem,
+        } as unknown as TimelineItem,
       ]);
     });
 
@@ -868,7 +871,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 120,
         src: 'blob:mock-video',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     act(() => {
       usePlaybackStore.getState().setCurrentFrame(24);
@@ -924,7 +927,7 @@ describe('VideoPreview sync behavior', () => {
               },
             },
           ],
-        } as TimelineItem,
+        } as unknown as TimelineItem,
       ]);
     });
 
@@ -963,7 +966,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 120,
         src: 'blob:mock-video',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     act(() => {
       usePlaybackStore.getState().setCurrentFrame(24);
@@ -1048,7 +1051,7 @@ describe('VideoPreview sync behavior', () => {
             },
           },
         ],
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     act(() => {
       usePlaybackStore.getState().setCurrentFrame(24);
@@ -1123,7 +1126,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 20,
         src: 'blob:plain-video',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'item-effected',
         type: 'video',
@@ -1142,7 +1145,7 @@ describe('VideoPreview sync behavior', () => {
             },
           },
         ],
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
 
     const { container } = render(
@@ -1210,7 +1213,7 @@ describe('VideoPreview sync behavior', () => {
             },
           },
         ],
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
 
     const { container } = render(
@@ -1400,7 +1403,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 60,
         src: 'blob:left',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'clip-right',
         label: 'Right',
@@ -1409,7 +1412,7 @@ describe('VideoPreview sync behavior', () => {
         from: 40,
         durationInFrames: 60,
         src: 'blob:right',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     useTransitionsStore.getState().setTransitions([
       {
@@ -1498,7 +1501,7 @@ describe('VideoPreview sync behavior', () => {
             },
           },
         ],
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'clip-plain',
         label: 'Plain',
@@ -1507,7 +1510,7 @@ describe('VideoPreview sync behavior', () => {
         from: 60,
         durationInFrames: 60,
         src: 'blob:plain',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
 
     const { container } = render(
@@ -1580,7 +1583,7 @@ describe('VideoPreview sync behavior', () => {
           blur: 18,
           color: '#00ffff',
         },
-      } as unknown as (typeof useItemsStore.getState)['items'][number],
+      } as unknown as ReturnType<typeof useItemsStore.getState>['items'][number],
     ]);
     useTimelineStore.setState({
       keyframes: [
@@ -1704,7 +1707,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 60,
         src: 'blob:left',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'clip-right',
         label: 'Right',
@@ -1713,7 +1716,7 @@ describe('VideoPreview sync behavior', () => {
         from: 40,
         durationInFrames: 60,
         src: 'blob:right',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     useTransitionsStore.getState().setTransitions([
       {
@@ -1792,7 +1795,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 60,
         src: 'blob:left',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'clip-right',
         label: 'Right',
@@ -1801,7 +1804,7 @@ describe('VideoPreview sync behavior', () => {
         from: 40,
         durationInFrames: 60,
         src: 'blob:right',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     useTransitionsStore.getState().setTransitions([
       {
@@ -1890,7 +1893,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 60,
         src: 'blob:left',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'clip-right',
         label: 'Right',
@@ -1899,7 +1902,7 @@ describe('VideoPreview sync behavior', () => {
         from: 40,
         durationInFrames: 60,
         src: 'blob:right',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
 
     render(
@@ -1977,7 +1980,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 60,
         src: 'blob:left',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'clip-right',
         label: 'Right',
@@ -1986,7 +1989,7 @@ describe('VideoPreview sync behavior', () => {
         from: 40,
         durationInFrames: 60,
         src: 'blob:right',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     useTransitionsStore.getState().setTransitions([
       {
@@ -2074,7 +2077,7 @@ describe('VideoPreview sync behavior', () => {
         durationInFrames: 60,
         src: 'blob:shared',
         originId: 'origin-a',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
       {
         id: 'clip-right',
         label: 'Right',
@@ -2084,7 +2087,7 @@ describe('VideoPreview sync behavior', () => {
         durationInFrames: 60,
         src: 'blob:shared',
         originId: 'origin-a',
-      } as TimelineItem,
+      } as unknown as TimelineItem,
     ]);
     useTransitionsStore.getState().setTransitions([
       {
@@ -2237,7 +2240,7 @@ describe('VideoPreview sync behavior', () => {
         from: 0,
         durationInFrames: 120,
         transform: { x: 0, y: 0, width: 100, height: 60, rotation: 0, opacity: 1 },
-      } as unknown as (typeof useItemsStore.getState)['items'][number],
+      } as unknown as ReturnType<typeof useItemsStore.getState>['items'][number],
     ]);
     useTimelineStore.setState({
       keyframes: [
@@ -2345,7 +2348,7 @@ describe('VideoPreview sync behavior', () => {
       duration: 4,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-    } as (typeof useMediaLibraryStore.getState)['mediaItems'][number];
+    } as unknown as ReturnType<typeof useMediaLibraryStore.getState>['mediaItems'][number];
 
     useMediaLibraryStore.setState({
       mediaItems: [media],
@@ -2375,7 +2378,7 @@ describe('VideoPreview sync behavior', () => {
         mediaId,
         from: 0,
         durationInFrames: 120,
-      } as unknown as (typeof useItemsStore.getState)['items'][number],
+      } as unknown as ReturnType<typeof useItemsStore.getState>['items'][number],
     ]);
 
     render(

@@ -1,13 +1,30 @@
 /**
- * Per-model max reference uploads for `source_media_urls`, aligned with Kubeez REST docs:
- * https://kubeez.com/docs/rest-api-model-requirements (max images + max videos when both apply).
+ * Per-model max reference uploads for `source_media_urls`, aligned with KubeezWebsite
+ * `fileRestrictions.ts` (`getFileLimitForModel`).
  *
- * When `GET /v1/models` omits merged limits, these values keep the UI accurate. Regenerate from
- * that page when Kubeez updates provider rules.
+ * When the website returns no finite cap (`Infinity`), fall back to Kubeez REST docs rows
+ * (same table as historical `kubeez-documented-reference-limits.ts`) for image-only / motion ids
+ * not covered by `fileRestrictions.ts`.
+ *
+ * Merge order with `applyModelRequirementFallbacks` (see `kubeez-model-requirements-fallback.ts`):
+ * finite web limit → REST docs exact/prefix → API `maxReferenceFiles` → optional explicit fallback row.
  */
 
-const EXACT: Record<string, number> = {
-  // Image — docs table
+import type { KubeezModelSettings } from './model-family-registry';
+import {
+  inferGenerationTypeForKubeezCut,
+  inferGenerationTypeFromConcreteModelId,
+  inferKubeezCutFileLimitOptions,
+} from './kubeez-generate-generation-context';
+import { getFileLimitForModel } from './kubeez-web-file-restrictions';
+
+function finiteMaxFiles(maxFiles: number): number | undefined {
+  if (!Number.isFinite(maxFiles) || maxFiles === Infinity) return undefined;
+  return maxFiles;
+}
+
+/** Kubeez REST docs (https://kubeez.com/docs/rest-api-model-requirements) — used when web returns Infinity. */
+const LEGACY_REST_EXACT: Record<string, number> = {
   '5-lite-image-to-image': 10,
   '5-lite-text-to-image': 10,
   'flux-2': 0,
@@ -36,8 +53,6 @@ const EXACT: Record<string, number> = {
   'seedream-v4-5-edit': 10,
   'z-image': 0,
   'z-image-hd': 0,
-
-  // Video
   'grok-image-to-video': 1,
   'grok-text-to-video-6s': 0,
   'kling-2-5-image-to-video-pro': 2,
@@ -48,11 +63,9 @@ const EXACT: Record<string, number> = {
   'kling-3-0-motion-control-1080p': 2,
 };
 
-/** Longest prefixes first for greedy match. */
-const PREFIX_RULES: { prefix: string; maxFiles: number }[] = [
+/** Longest prefixes first. Only consulted after web + exact legacy. */
+const LEGACY_REST_PREFIX_RULES: { prefix: string; maxFiles: number }[] = [
   { prefix: 'seedance-1-5-pro-', maxFiles: 2 },
-  /** Kling 3.0 std/pro: up to 2 images for I2V; T2V uses 0 refs (same cap for upload UI). */
-  { prefix: 'kling-3-0-', maxFiles: 2 },
   { prefix: 'kling-2-6-image-to-video-', maxFiles: 1 },
   { prefix: 'kling-2-6-text-to-video-', maxFiles: 0 },
   { prefix: 'v1-pro-fast-i2v-', maxFiles: 1 },
@@ -61,33 +74,65 @@ const PREFIX_RULES: { prefix: string; maxFiles: number }[] = [
   { prefix: 'sora-2-pro-text-to-video-', maxFiles: 0 },
   { prefix: 'sora-2-image-to-video-', maxFiles: 1 },
   { prefix: 'sora-2-text-to-video-', maxFiles: 0 },
-  { prefix: 'veo3-1-', maxFiles: 3 },
   { prefix: 'wan-2-5-image-to-video-', maxFiles: 1 },
   { prefix: 'wan-2-5-text-to-video-', maxFiles: 0 },
   { prefix: 'wan-2-5', maxFiles: 0 },
 ];
 
+/**
+ * Catalog-only inference from `model_id` (no UI settings). Used when merging `GET /v1/models` rows.
+ */
 export function documentedMaxReferenceFilesForModelId(modelId: string): number | undefined {
   if (!modelId) return undefined;
-  if (modelId in EXACT) return EXACT[modelId];
-
-  for (const { prefix, maxFiles } of PREFIX_RULES) {
-    if (modelId.startsWith(prefix)) return maxFiles;
+  const gt = inferGenerationTypeFromConcreteModelId(modelId);
+  const { maxFiles } = getFileLimitForModel(modelId, gt, { multiShot: false });
+  const web = finiteMaxFiles(maxFiles);
+  if (web !== undefined) return web;
+  if (modelId in LEGACY_REST_EXACT) return LEGACY_REST_EXACT[modelId];
+  for (const { prefix, maxFiles: n } of LEGACY_REST_PREFIX_RULES) {
+    if (modelId.startsWith(prefix)) return n;
   }
-
   return undefined;
 }
 
-/** API value wins; otherwise Kubeez REST model requirements (docs). */
-export function effectiveMaxReferenceFilesForModel(model: {
-  model_id: string;
-  maxReferenceFiles?: number;
-} | null | undefined): number | undefined {
+/**
+ * Generate dialog: uses UI `settings` so Veo / Kling / Sora / Wan / Grok modes match KubeezWebsite.
+ */
+export function effectiveMaxReferenceFilesForGenerateDialog(
+  model: { model_id: string; maxReferenceFiles?: number } | null | undefined,
+  ctx: { resolvedModelId: string; baseCardId: string; settings: KubeezModelSettings }
+): number | undefined {
   if (!model) return undefined;
+  const gen = inferGenerationTypeForKubeezCut({
+    baseCardId: ctx.baseCardId,
+    settings: ctx.settings,
+  });
+  const opts = { multiShot: false as const, ...inferKubeezCutFileLimitOptions(ctx.settings) };
+  const { maxFiles } = getFileLimitForModel(ctx.resolvedModelId, gen, opts);
+  const doc = finiteMaxFiles(maxFiles);
+  if (doc !== undefined) return doc;
+  const idDoc = documentedMaxReferenceFilesForModelId(ctx.resolvedModelId);
+  if (idDoc !== undefined) return idDoc;
   if (typeof model.maxReferenceFiles === 'number' && Number.isFinite(model.maxReferenceFiles)) {
     const n = Math.floor(model.maxReferenceFiles);
     if (n < 0) return 0;
     return Math.min(32, n);
   }
-  return documentedMaxReferenceFilesForModelId(model.model_id);
+  return undefined;
+}
+
+/** Docs table wins when defined; otherwise API `maxReferenceFiles`. */
+export function effectiveMaxReferenceFilesForModel(model: {
+  model_id: string;
+  maxReferenceFiles?: number;
+} | null | undefined): number | undefined {
+  if (!model) return undefined;
+  const doc = documentedMaxReferenceFilesForModelId(model.model_id);
+  if (doc !== undefined) return doc;
+  if (typeof model.maxReferenceFiles === 'number' && Number.isFinite(model.maxReferenceFiles)) {
+    const n = Math.floor(model.maxReferenceFiles);
+    if (n < 0) return 0;
+    return Math.min(32, n);
+  }
+  return undefined;
 }

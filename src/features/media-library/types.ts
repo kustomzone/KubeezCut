@@ -52,6 +52,18 @@ export interface OrphanedClipInfo {
   trackId: string;
 }
 
+/** In-progress Kubeez generate job shown as a dashed card in the media library grid */
+export interface KubeezPendingGeneration {
+  id: string;
+  projectId: string;
+  label: string;
+  modelDisplayName: string;
+  filterMimeCategory: 'image' | 'video' | 'audio';
+  createdAt: number;
+  status: 'generating' | 'error';
+  errorMessage?: string;
+}
+
 export interface MediaLibraryState {
   currentProjectId: string | null; // v3: Project context for scoped operations
   mediaItems: MediaMetadata[];
@@ -92,6 +104,8 @@ export interface MediaLibraryState {
   transcriptStatus: Map<string, MediaTranscriptStatus>;
   transcriptProgress: Map<string, MediaTranscriptProgress>;
 
+  /** Kubeez background generations (pending/error cards) */
+  kubeezPendingGenerations: KubeezPendingGeneration[];
 }
 
 export interface MediaLibraryActions {
@@ -180,4 +194,11 @@ export interface MediaLibraryActions {
   setTranscriptStatus: (mediaId: string, status: MediaTranscriptStatus) => void;
   setTranscriptProgress: (mediaId: string, progress: MediaTranscriptProgress) => void;
   clearTranscriptProgress: (mediaId: string) => void;
+
+  registerKubeezPendingGeneration: (pending: KubeezPendingGeneration) => void;
+  removeKubeezPendingGeneration: (id: string) => void;
+  patchKubeezPendingGeneration: (
+    id: string,
+    patch: Partial<Pick<KubeezPendingGeneration, 'status' | 'errorMessage'>>
+  ) => void;
 }

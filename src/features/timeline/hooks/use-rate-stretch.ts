@@ -27,7 +27,7 @@ type StretchHandle = 'start' | 'end';
 const LOOPING_MEDIA_MAX_DURATION = 30 * 60 * 10; // 10 minutes at 30fps
 
 export function isRateStretchableItem(item: Pick<TimelineItem, 'type' | 'label'>): boolean {
-  const isGifImage = item.type === 'image' && item.label?.toLowerCase().endsWith('.gif');
+  const isGifImage = item.type === 'image' && item.label.toLowerCase().endsWith('.gif');
   return item.type === 'video' || item.type === 'audio' || item.type === 'composition' || isGifImage;
 }
 
@@ -42,7 +42,7 @@ export function getLoopingMediaStretchPreviewSpeed(initialSpeed: number, deltaFr
  */
 function computeRipplePreviewUpdates(
   items: TimelineItem[],
-  stretchedItemId: string,
+  _stretchedItemId: string,
   synchronizedIds: Set<string>,
   oldFrom: number,
   oldEnd: number,

@@ -1,9 +1,11 @@
 import { create } from 'zustand';
-import type { EditorState, EditorActions } from './types';
+import type { EditorState, EditorActions, LibrarySidebarTab } from './types';
 import {
   EDITOR_LAYOUT,
+  getEditorLayout,
   getLeftEditorSidebarBounds,
   getRightEditorSidebarBounds,
+  type EditorLayout,
 } from '@/shared/ui/editor-layout';
 
 const LEGACY_SIDEBAR_DEFAULT_WIDTH = 320;
@@ -39,7 +41,7 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   activePanel: null,
   leftSidebarOpen: true,
   rightSidebarOpen: true,
-  keyframeEditorOpen: false,
+  lastLibraryTab: 'media',
   activeTab: 'media',
   clipInspectorTab: 'video',
   sidebarWidth: loadSidebarWidth('editor:sidebarWidth', EDITOR_LAYOUT.leftSidebarDefaultWidth),
@@ -71,20 +73,47 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
   setActivePanel: (panel) => set({ activePanel: panel }),
   setLeftSidebarOpen: (open) => set({ leftSidebarOpen: open }),
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
-  setKeyframeEditorOpen: (open) => set((state) => ({
-    keyframeEditorOpen: open,
-    leftSidebarOpen: open ? true : state.leftSidebarOpen,
-  })),
+  setKeyframeEditorOpen: (open) => set((state) => {
+    if (open) {
+      return {
+        activeTab: 'keyframes',
+        lastLibraryTab:
+          state.activeTab === 'keyframes'
+            ? state.lastLibraryTab
+            : (state.activeTab as LibrarySidebarTab),
+        leftSidebarOpen: true,
+      };
+    }
+    return {
+      activeTab: state.lastLibraryTab,
+    };
+  }),
   toggleLeftSidebar: () => set((state) => ({ leftSidebarOpen: !state.leftSidebarOpen })),
   toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
   toggleKeyframeEditorOpen: () => set((state) => {
-    const nextOpen = !state.keyframeEditorOpen;
+    if (state.activeTab === 'keyframes') {
+      return { activeTab: state.lastLibraryTab };
+    }
     return {
-      keyframeEditorOpen: nextOpen,
-      leftSidebarOpen: nextOpen ? true : state.leftSidebarOpen,
+      activeTab: 'keyframes',
+      lastLibraryTab: state.activeTab as LibrarySidebarTab,
+      leftSidebarOpen: true,
     };
   }),
-  setActiveTab: (tab) => set({ activeTab: tab }),
+  setActiveTab: (tab) => set((state) => {
+    if (tab === 'keyframes') {
+      return {
+        activeTab: 'keyframes',
+        lastLibraryTab:
+          state.activeTab === 'keyframes' ? state.lastLibraryTab : (state.activeTab as LibrarySidebarTab),
+        leftSidebarOpen: true,
+      };
+    }
+    return {
+      activeTab: tab,
+      lastLibraryTab: tab,
+    };
+  }),
   setClipInspectorTab: (tab) => set({ clipInspectorTab: tab }),
   setSidebarWidth: (width) => {
     try { localStorage.setItem('editor:sidebarWidth', String(width)); } catch { /* noop */ }
@@ -94,18 +123,22 @@ export const useEditorStore = create<EditorState & EditorActions>((set) => ({
     try { localStorage.setItem('editor:rightSidebarWidth', String(width)); } catch { /* noop */ }
     set({ rightSidebarWidth: width });
   },
-  syncSidebarLayout: (layout) => set((currentState) => ({
-    sidebarWidth: normalizeSidebarWidth(
-      currentState.sidebarWidth,
-      layout.leftSidebarDefaultWidth,
-      getLeftEditorSidebarBounds(layout)
-    ),
-    rightSidebarWidth: normalizeSidebarWidth(
-      currentState.rightSidebarWidth,
-      layout.rightSidebarDefaultWidth,
-      getRightEditorSidebarBounds(layout)
-    ),
-  })),
+  syncSidebarLayout: (layout) => set((currentState) => {
+    const resolved: EditorLayout =
+      typeof layout === 'string' ? getEditorLayout(layout) : layout;
+    return {
+      sidebarWidth: normalizeSidebarWidth(
+        currentState.sidebarWidth,
+        resolved.leftSidebarDefaultWidth,
+        getLeftEditorSidebarBounds(resolved)
+      ),
+      rightSidebarWidth: normalizeSidebarWidth(
+        currentState.rightSidebarWidth,
+        resolved.rightSidebarDefaultWidth,
+        getRightEditorSidebarBounds(resolved)
+      ),
+    };
+  }),
   setTimelineHeight: (height) => set({ timelineHeight: height }),
   setSourcePreviewMediaId: (mediaId) => set({
     sourcePreviewMediaId: mediaId,

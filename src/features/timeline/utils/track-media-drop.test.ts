@@ -28,7 +28,7 @@ function makeTrack(params: {
 
 describe('planTrackMediaDropPlacements', () => {
   it('plans linked video drops onto both video and audio tracks', () => {
-    const tracks = createDefaultClassicTracks(80);
+    const tracks = createDefaultClassicTracks(72);
 
     const result = planTrackMediaDropPlacements({
       entries: [{
@@ -107,7 +107,7 @@ describe('planTrackMediaDropPlacements', () => {
 
   it('rejects visual media dropped on an audio track', () => {
     const tracks = [
-      ...createDefaultClassicTracks(80),
+      ...createDefaultClassicTracks(72),
       makeTrack({ id: 'a1', name: 'A1', kind: 'audio', order: 1 }),
     ];
 
@@ -128,7 +128,7 @@ describe('planTrackMediaDropPlacements', () => {
   });
 
   it('rejects audio media dropped on a video track', () => {
-    const tracks = createDefaultClassicTracks(80);
+    const tracks = createDefaultClassicTracks(72);
 
     const result = planTrackMediaDropPlacements({
       entries: [{
@@ -149,7 +149,7 @@ describe('planTrackMediaDropPlacements', () => {
 
 describe('buildGhostPreviewsFromTrackMediaDropPlan', () => {
   it('builds a companion audio ghost on the linked audio track', () => {
-    const tracks = createDefaultClassicTracks(80);
+    const tracks = createDefaultClassicTracks(72);
     const { plannedItems } = planTrackMediaDropPlacements({
       entries: [{
         payload: { id: 'media-1' },

@@ -28,7 +28,7 @@ import {
   useTransitionBreakageNotifications,
 } from '@/features/editor/deps/timeline-hooks';
 import { initTransitionChainSubscription } from '@/features/editor/deps/timeline-subscriptions';
-import { useTimelineStore, useItemsStore } from '@/features/editor/deps/timeline-store';
+import { useTimelineStore, useItemsStore, useTimelineSettingsStore } from '@/features/editor/deps/timeline-store';
 import { useEditorPanelLayoutStore } from '@/shared/state/editor-panel-layout-store';
 import { importBundleExportDialog, BUNDLE_EXTENSION } from '@/features/editor/deps/project-bundle';
 import { useMediaLibraryStore } from '@/features/editor/deps/media-library';
@@ -44,6 +44,7 @@ import { cn } from '@/shared/ui/cn';
 import { createProjectUpgradeBackup, formatProjectUpgradeBackupName } from '@/features/editor/deps/projects';
 import { ProjectUpgradeDialog } from './project-upgrade-dialog';
 import { ProjectMediaMatchDialog } from './project-media-match-dialog';
+import { EditorLoadingScreen } from './editor-loading-screen';
 const logger = createLogger('Editor');
 const EDITOR_PROJECT_ROUTE_ID = '/editor/$projectId';
 
@@ -163,6 +164,16 @@ export const LoadedEditor = memo(function LoadedEditor({
   migration,
 }: EditorProps) {
   const router = useRouter();
+  const isTimelineLoading = useTimelineSettingsStore((s) => s.isTimelineLoading);
+  const mediaLibraryProjectId = useMediaLibraryStore((s) => s.currentProjectId);
+  const mediaLibraryLoading = useMediaLibraryStore((s) => s.isLoading);
+  const showProjectLoading =
+    isTimelineLoading || (mediaLibraryLoading && mediaLibraryProjectId === projectId);
+
+  useLayoutEffect(() => {
+    useTimelineSettingsStore.getState().setTimelineLoading(true);
+  }, [projectId]);
+
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [bundleExportDialogOpen, setBundleExportDialogOpen] = useState(false);
   const [bundleFileHandle, setBundleFileHandle] = useState<FileSystemFileHandle | undefined>();
@@ -437,11 +448,17 @@ export const LoadedEditor = memo(function LoadedEditor({
 
   return (
     <div
-      className="bg-background flex h-screen w-screen flex-col overflow-hidden"
+      className="bg-background relative flex h-screen w-screen flex-col overflow-hidden"
       style={editorLayoutCssVars as import('react').CSSProperties}
       role="application"
       aria-label="KubeezCut Video Editor"
     >
+      {showProjectLoading ? (
+        <div className="absolute inset-0 z-[200] flex items-center justify-center bg-background/85 backdrop-blur-sm">
+          <EditorLoadingScreen subtitle={project.name} />
+        </div>
+      ) : null}
+
       {/* Kubeez feature bar (project, save, export, settings) — above OpenCut-style shell */}
       <InteractionLockRegion locked={isMaskEditingActive}>
         <Toolbar

@@ -1,12 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { CURRENT_SCHEMA_VERSION } from '@/domain/projects/migrations';
 import { getProject } from '@/infrastructure/storage/indexeddb';
+import { EditorLoadingScreen } from '@/features/editor/components/editor-loading-screen';
 
 export const Route = createFileRoute('/editor/$projectId')({
   // Editor loader data is tiny and migration state must be fresh on reopen.
   // Avoid keeping inactive editor matches around with stale "requires upgrade" flags.
   gcTime: 0,
   preloadGcTime: 0,
+  pendingComponent: () => (
+    <EditorLoadingScreen className="min-h-screen bg-background" />
+  ),
   loader: async ({ params }) => {
     // Validate project exists - actual loading happens in Editor via loadTimeline
     const project = await getProject(params.projectId);

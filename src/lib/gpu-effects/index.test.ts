@@ -4,7 +4,7 @@ import { getGpuEffect, getGpuEffectDefaultParams } from './index';
 describe('GPU effect registry', () => {
   it('registers the dither effect with stable default uniforms', () => {
     const effect = getGpuEffect('gpu-dither');
-    expect(effect).toBeDefined();
+    if (!effect) throw new Error('missing gpu-dither');
     expect(effect?.category).toBe('stylize');
 
     const defaults = getGpuEffectDefaultParams('gpu-dither');
@@ -21,7 +21,7 @@ describe('GPU effect registry', () => {
       offsetY: 0,
     });
 
-    expect(Array.from(effect!.packUniforms(defaults, 1920, 1080)!)).toEqual([
+    expect(Array.from(effect.packUniforms(defaults, 1920, 1080)!)).toEqual([
       8,
       45,
       100,
@@ -36,15 +36,15 @@ describe('GPU effect registry', () => {
       1,
     ]);
 
-    expect(effect!.params.angle.visibleWhen?.(defaults)).toBe(false);
-    expect(effect!.params.angle.visibleWhen?.({ ...defaults, mode: 'linear' })).toBe(true);
-    expect(effect!.params.scale.visibleWhen?.(defaults)).toBe(false);
-    expect(effect!.params.scale.visibleWhen?.({ ...defaults, mode: 'radial' })).toBe(true);
+    expect(effect.params?.angle?.visibleWhen?.(defaults) ?? false).toBe(false);
+    expect(effect.params?.angle?.visibleWhen?.({ ...defaults, mode: 'linear' }) ?? false).toBe(true);
+    expect(effect.params?.scale?.visibleWhen?.(defaults) ?? false).toBe(false);
+    expect(effect.params?.scale?.visibleWhen?.({ ...defaults, mode: 'radial' }) ?? false).toBe(true);
   });
 
   it('registers the ascii effect with shader-friendly defaults', () => {
     const effect = getGpuEffect('gpu-ascii');
-    expect(effect).toBeDefined();
+    if (!effect) throw new Error('missing gpu-ascii');
     expect(effect?.category).toBe('stylize');
 
     const defaults = getGpuEffectDefaultParams('gpu-ascii');
@@ -64,7 +64,7 @@ describe('GPU effect registry', () => {
       invert: false,
     });
 
-    expect(Array.from(effect!.packUniforms(defaults, 1920, 1080)!)).toEqual(Array.from(new Float32Array([
+    expect(Array.from(effect.packUniforms(defaults, 1920, 1080)!)).toEqual(Array.from(new Float32Array([
       8,
       0,
       1,
@@ -91,9 +91,9 @@ describe('GPU effect registry', () => {
       1,
     ])));
 
-    expect(effect!.params.textColor.visibleWhen?.(defaults)).toBe(false);
-    expect(effect!.params.textColor.visibleWhen?.({ ...defaults, matchSourceColor: false })).toBe(true);
-    expect(effect!.params.colorSaturation.visibleWhen?.(defaults)).toBe(true);
-    expect(effect!.params.colorSaturation.visibleWhen?.({ ...defaults, matchSourceColor: false })).toBe(false);
+    expect(effect.params?.textColor?.visibleWhen?.(defaults) ?? false).toBe(false);
+    expect(effect.params?.textColor?.visibleWhen?.({ ...defaults, matchSourceColor: false }) ?? false).toBe(true);
+    expect(effect.params?.colorSaturation?.visibleWhen?.(defaults) ?? false).toBe(true);
+    expect(effect.params?.colorSaturation?.visibleWhen?.({ ...defaults, matchSourceColor: false }) ?? false).toBe(false);
   });
 });

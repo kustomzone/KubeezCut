@@ -75,6 +75,22 @@ export const useMediaLibraryStore = create<
       transcriptStatus: new Map(),
       transcriptProgress: new Map(),
 
+      kubeezPendingGenerations: [],
+
+      registerKubeezPendingGeneration: (pending) =>
+        set((state) => ({
+          kubeezPendingGenerations: [...state.kubeezPendingGenerations, pending],
+        })),
+      removeKubeezPendingGeneration: (id) =>
+        set((state) => ({
+          kubeezPendingGenerations: state.kubeezPendingGenerations.filter((p) => p.id !== id),
+        })),
+      patchKubeezPendingGeneration: (id, patch) =>
+        set((state) => ({
+          kubeezPendingGenerations: state.kubeezPendingGenerations.map((p) =>
+            p.id === id ? { ...p, ...patch } : p
+          ),
+        })),
 
       // v3: Set current project context
       setCurrentProject: (projectId: string | null) => {
@@ -95,6 +111,7 @@ export const useMediaLibraryStore = create<
           proxyProgress: new Map(),
           transcriptStatus: new Map(),
           transcriptProgress: new Map(),
+          kubeezPendingGenerations: [],
         });
         // Note: loadMediaItems is triggered by the component's useEffect
         // Don't call it here to avoid double loading

@@ -77,7 +77,7 @@ export async function validateSnapshotData(
     }
   }
 
-  if (validation.success) {
+  if (validation.success && validation.data) {
     try {
       const migrationResult = migrateProject(validation.data.project as Project);
       if (migrationResult.migrated) {

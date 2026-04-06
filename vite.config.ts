@@ -1,25 +1,97 @@
-import { defineConfig } from 'vite'
+import fs from 'node:fs'
+import path from 'node:path'
+import { defineConfig, loadEnv } from 'vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import path from 'path'
+
+function resolvePublicSiteUrl(mode: string): string {
+  const env = loadEnv(mode, process.cwd(), '')
+  const raw = env.VITE_PUBLIC_SITE_URL || 'https://editor.kubeez.com'
+  return raw.replace(/\/+$/, '')
+}
+
+/** Replaces %SITE_URL% in index.html; writes robots.txt + sitemap.xml on production build. */
+function seoPlugin(siteUrl: string): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'seo-site-url',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    transformIndexHtml(html) {
+      return html.replaceAll('%SITE_URL%', siteUrl)
+    },
+    closeBundle() {
+      const robots = `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`
+      const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${siteUrl}/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${siteUrl}/projects</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+</urlset>`
+      fs.mkdirSync(outDir, { recursive: true })
+      fs.writeFileSync(path.join(outDir, 'robots.txt'), robots, 'utf8')
+      fs.writeFileSync(path.join(outDir, 'sitemap.xml'), sitemap, 'utf8')
+    },
+  }
+}
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), seoPlugin(resolvePublicSiteUrl(mode))],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@kubeez-website': path.resolve(__dirname, './KubeezWebsite/src'),
     },
   },
   server: {
     port: 5173,
     strictPort: true,
+    /** Same-origin `/api/kubeez/*` → api.kubeez.com (avoids CORS + COEP). Must match production rewrites in vercel.json. */
+    proxy: {
+      // Longer prefix MUST be first: `/api/kubeez` matches `/api/kubeez-media/...` via startsWith and would rewrite to `-media/...` on the API host (404).
+      '/api/kubeez-media': {
+        target: 'https://media.kubeez.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/api\/kubeez-media/, '') || '/',
+      },
+      '/api/kubeez': {
+        target: 'https://api.kubeez.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/api\/kubeez/, '') || '/',
+      },
+    },
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Opener-Policy': 'same-origin',
     },
   },
   preview: {
+    proxy: {
+      '/api/kubeez-media': {
+        target: 'https://media.kubeez.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/api\/kubeez-media/, '') || '/',
+      },
+      '/api/kubeez': {
+        target: 'https://api.kubeez.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/api\/kubeez/, '') || '/',
+      },
+    },
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Opener-Policy': 'same-origin',
@@ -127,4 +199,4 @@ export default defineConfig({
     // Pre-bundle lucide-react for faster dev startup (avoids analyzing 1500+ icons on each reload)
     include: ['lucide-react'],
   },
-})
+}))

@@ -35,7 +35,7 @@ export function isProjectMatchableVideo(media: MediaMetadata): boolean {
 
 export function getProjectMediaMatchSuggestion(
   project: ProjectResolution,
-  media: MediaMetadata
+  media: Pick<MediaMetadata, 'width' | 'height' | 'fps'>
 ): ProjectMediaMatchSuggestion {
   const width = normalizeDimension(media.width);
   const height = normalizeDimension(media.height);

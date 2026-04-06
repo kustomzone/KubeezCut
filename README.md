@@ -1,268 +1,317 @@
-# KubeezCut
+KubeezCut
+██╗  ██╗██╗   ██╗██████╗ ███████╗███████╗███████╗ ██████╗██╗   ██╗████████╗
+██║ ██╔╝██║   ██║██╔══██╗██╔════╝██╔════╝██╔════╝██╔════╝██║   ██║╚══██╔══╝
+█████╔╝ ██║   ██║██████╔╝█████╗  █████╗  █████╗  ██║     ██║   ██║   ██║   
+██╔═██╗ ██║   ██║██╔══██╗██╔══╝  ██╔══╝  ██╔══╝  ██║     ██║   ██║   ██║   
+██║  ██╗╚██████╔╝██████╔╝███████╗███████╗███████╗╚██████╗╚██████╔╝   ██║   
+╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝╚══════╝ ╚═════╝ ╚═════╝    ╚═╝
+🎬 Edit videos. Directly in your browser.
 
-**Edit videos. In your browser.**
+KubeezCut is a powerful multi-track video editor that runs entirely locally using modern browser APIs.
 
-Browser-based multi-track video editor. No installation, no uploads — everything runs locally in your browser using WebGPU, WebCodecs, OPFS, and the File System Access API.
+No installs.
+No uploads.
+No cloud processing.
 
-KubeezCut was inspired by the open-source [FreeCut](https://github.com/walterlow/freecut) and [OpenCut](https://github.com/OpenCut-app/OpenCut) projects on GitHub.
+Everything runs on your machine via:
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+⚡ WebGPU
+⚡ WebCodecs
+⚡ OPFS
+⚡ File System Access API
 
-![KubeezCut Timeline Editor](./public/assets/landing/timeline.png)
+Inspired by open-source projects like [FreeCut](https://github.com/walterlow/freecut) and [OpenCut](https://github.com/OpenCut-app/OpenCut), KubeezCut brings professional editing workflows to the browser.
 
-## Features
+We also built an AI-inspired flow so you can add generated media—images, audio, and video—into your timeline via the Kubeez API, alongside files from your machine.
 
-### Timeline & Editing
+✨ Features
+🎞 Timeline & Editing
 
-- Multi-track timeline with video, audio, text, image, and shape tracks
-- Track groups with mute/visible/locked propagation
-- Trim, split, join, ripple delete, and rate stretch tools
-- Rolling edit, ripple edit, slip, and slide tools
-- Per-track "Close Gaps" to remove empty space between clips
-- Filmstrip thumbnails and audio waveform visualization
-- Pre-compositions (nested compositions, 1 level deep)
-- Markers for organizing your edit
-- Source monitor with mark in/out via playhead or skimmer and insert/overwrite edits
-- Undo/redo with configurable history depth
+Professional multi-track editing system:
 
-### GPU Effects
+• Video, audio, image, text, and shape tracks
+• Track groups with mute / visibility / lock propagation
+• Trim, split, join, ripple delete, and rate stretch
+• Rolling edit, ripple edit, slip, slide tools
+• Filmstrip thumbnails
+• Audio waveform visualization
+• Markers for edit organization
+• Source monitor with mark in / out
+• Insert & overwrite editing workflow
+• Pre-compositions (nested sequences)
+• Undo / redo with configurable history depth
 
-All visual effects are WebGPU-accelerated.
+🎨 GPU Effects (WebGPU accelerated)
 
-- **Blur** — gaussian, box, motion, radial, zoom
-- **Color** — brightness, contrast, exposure, hue shift, saturation, vibrance, temperature/tint, levels, curves, color wheels, grayscale, sepia, invert
-- **Distortion** — pixelate, RGB split, twirl, wave, bulge/pinch, kaleidoscope, mirror, fluted glass
-- **Stylize** — vignette, film grain, sharpen, posterize, glow, edge detect, scanlines, color glitch
-- **Keying** — chroma key (green/blue screen) with tolerance, softness, and spill suppression
+All effects run directly on the GPU for real-time preview.
 
-### Blend Modes
+Blur
 
-25 GPU-accelerated blend modes: normal, darken, multiply, color burn, linear burn, lighten, screen, color dodge, linear dodge, overlay, soft light, hard light, vivid light, linear light, pin light, hard mix, difference, exclusion, subtract, divide, hue, saturation, color, luminosity.
+• gaussian
+• box
+• motion
+• radial
+• zoom
 
-### Masks
+Color
 
-Layer masks with keyframeable geometry transforms for compositing and selective effect application.
+• brightness
+• contrast
+• exposure
+• hue shift
+• saturation
+• vibrance
+• temperature / tint
+• curves
+• color wheels
+• grayscale
+• sepia
+• invert
 
-### Transitions
+Distortion
 
-- **CPU transitions** — fade, wipe, slide, 3D flip, clock wipe, iris — each with directional variants
-- **GPU transitions** — dissolve, sparkles, glitch, light leak, pixelate, chromatic aberration, radial blur
-- Adjustable duration and alignment
+• pixelate
+• RGB split
+• twirl
+• wave
+• bulge / pinch
+• kaleidoscope
+• mirror
+• fluted glass
 
-### Keyframe Animation
+Stylize
 
-- Bezier curve editor with preset easing functions
-- Easing: linear, ease-in, ease-out, ease-in-out, cubic-bezier, spring
-- Auto-keyframe mode with dopesheet toggle
-- Graph editor, dopesheet, and split view
+• vignette
+• film grain
+• sharpen
+• posterize
+• glow
+• edge detect
+• scanlines
+• color glitch
 
-### Preview & Playback
+Keying
 
-- Real-time WebGPU-composited preview with transform gizmo (drag, resize, rotate)
-- Frame-accurate playback via custom Clock engine
-- GPU scopes — waveform, vectorscope, histogram
-- Snap guides and timecode display
+• chroma key (green screen)
+• tolerance
+• softness
+• spill suppression
 
-### Export
+🔀 Blend Modes
 
-- In-browser rendering via WebCodecs (no server required)
-- **Video containers:** MP4, WebM, MOV, MKV
-- **Video codecs:** H.264, H.265, VP8, VP9, AV1
-- **Audio export formats:** MP3, AAC, WAV (PCM)
-- Quality presets: low (2 Mbps), medium (5 Mbps), high (10 Mbps), ultra (20 Mbps)
+25 GPU blend modes:
 
-### Media
+normal
+multiply
+screen
+overlay
+soft light
+hard light
+difference
+exclusion
+color dodge
+linear dodge
+color burn
+linear burn
+subtract
+divide
+hue
+saturation
+color
+luminosity
 
-- Import via File System Access API — files are referenced, never copied
-- **Video:** MP4, WebM, MOV, MKV
-- **Audio:** MP3, WAV, AAC, OGG, Opus
-- **Image:** JPG, PNG, GIF (animated), WebP
-- Up to 5 GB per file
-- OPFS proxy video generation for smooth preview
-- Media relinking for moved or deleted files
-- Scene detection and optical flow analysis
+and more.
 
-### Transcription
+🎭 Masks
 
-- Browser-based speech-to-text via Whisper (runs locally in a Web Worker)
-- Models: Tiny, Base, Small, Large v3 Turbo
-- Auto-generate caption text items from transcripts
-- Multi-language support
+Layer masks allow precise compositing and selective effect application.
 
-### Other
+Supports animated mask transforms via keyframes.
 
-- Native SVG shapes — rectangle, circle, triangle, ellipse, star, polygon, heart
-- Text overlays with custom fonts, colors, and positioning
-- Project bundles — export/import projects as ZIP files with Zod-validated schemas
-- IndexedDB persistence with content-addressable storage
-- Auto-save
-- Customizable keyboard shortcuts with preset import/export
-- Configurable settings (default FPS, snap, waveforms, filmstrips, preview quality, export defaults, undo depth, auto-save interval)
+🔄 Transitions
+CPU transitions
 
-## Quick Start
+• fade
+• wipe
+• slide
+• 3D flip
+• clock wipe
+• iris
 
-**Prerequisites:** Node.js 18+
+GPU transitions
 
-```bash
-git clone <your-repository-url>
-cd KubeezCut
-npm install
-npm run dev
-```
+• dissolve
+• sparkles
+• glitch
+• light leak
+• pixelate
+• chromatic aberration
+• radial blur
 
-Open [http://localhost:5173](http://localhost:5173) in Chrome.
+Adjustable duration and alignment.
 
-### Workflow
+🎯 Keyframe Animation
 
-1. Create a project from the projects page
-2. Import media by dragging files into the media library
-3. Drag clips to the timeline — trim, arrange, add effects and transitions
-4. Animate with the keyframe editor
-5. Preview your edit in real time
-6. Export directly from the browser
+• Bezier curve editor
+• easing presets
+• dopesheet
+• graph editor
+• auto keyframe mode
+• spring animation
 
-## Browser Support
+▶ Preview Engine
 
-Chrome or Edge 113+ recommended. KubeezCut uses WebGPU, WebCodecs, OPFS, and the File System Access API, so a modern Chromium browser is required for the full workflow.
+Real-time GPU preview engine:
 
-### Brave
+• frame-accurate playback
+• transform gizmo (drag, resize, rotate)
+• waveform scope
+• vectorscope
+• histogram
+• snap guides
+• timecode display
 
-Brave disables the File System Access API by default. To enable it:
+📦 Export
 
-1. Navigate to `brave://flags/#file-system-access-api`
-2. Change the setting from **Disabled** to **Enabled**
-3. Click **Relaunch** to restart the browser
+Render directly inside the browser.
 
-## Keyboard Shortcuts
+containers
 
-| Action | Shortcut |
-| --- | --- |
-| Play / Pause | `Space` |
-| Previous / Next frame | `Left` / `Right` |
-| Previous / Next snap point | `Up` / `Down` |
-| Go to start / end | `Home` / `End` |
-| Split at playhead | `Ctrl+K` |
-| Split at cursor | `Shift+C` |
-| Join clips | `Shift+J` |
-| Delete selected | `Delete` |
-| Ripple delete | `Ctrl+Delete` |
-| Freeze frame | `Shift+F` |
-| Nudge item (1px / 10px) | `Shift+Arrow` / `Ctrl+Shift+Arrow` |
-| Undo / Redo | `Ctrl+Z` / `Ctrl+Shift+Z` |
-| Copy / Cut / Paste | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` |
-| Selection tool | `V` |
-| Razor tool | `C` |
-| Rate stretch tool | `R` |
-| Rolling edit tool | `N` |
-| Ripple edit tool | `B` |
-| Slip tool | `Y` |
-| Slide tool | `U` |
-| Toggle snap | `S` |
-| Add / Remove marker | `M` / `Shift+M` |
-| Previous / Next marker | `[` / `]` |
-| Add keyframe | `A` |
-| Clear keyframes | `Shift+A` |
-| Toggle keyframe editor | `Ctrl+Shift+A` |
-| Keyframe view: graph / dopesheet / split | `1` / `2` / `3` |
-| Group / Ungroup tracks | `Ctrl+G` / `Ctrl+Shift+G` |
-| Mark In / Out | `I` / `O` |
-| Clear In/Out | `Alt+X` |
-| Insert / Overwrite edit | `,` / `.` |
-| Zoom in / out | `Ctrl+=` / `Ctrl+-` |
-| Zoom to fit | `\` |
-| Zoom to 100% | `Shift+\` |
-| Save | `Ctrl+S` |
-| Export | `Ctrl+Shift+E` |
+MP4
+WebM
+MOV
+MKV
 
-See the in-app shortcuts dialog for the full list and any updates.
+codecs
 
-## Tech Stack
+H264
+H265
+VP8
+VP9
+AV1
 
-- [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- [Vite](https://vitejs.dev/) — build tool with HMR
-- [WebGPU](https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API) — GPU-accelerated effects, compositing, and scopes
-- [Zustand](https://github.com/pmndrs/zustand) + [Zundo](https://github.com/charkour/zundo) — state management with undo/redo
-- [TanStack Router](https://tanstack.com/router) — file-based type-safe routing
-- [Tailwind CSS 4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) — styling and UI components
-- [Mediabunny](https://mediabunny.dev/) — media decoding and metadata extraction
-- [WebCodecs](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — composition rendering and export
-- [OPFS](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system) + [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) — local persistence
-- Web Workers — heavy processing off the main thread
+audio
 
-## Development
+MP3
+AAC
+WAV
 
-```bash
-npm run dev            # Dev server on port 5173
-npm run dev:quiet      # Dev server with perf-focused env (hides debug panel)
-npm run dev:compare    # Run dev and local perf preview together
-npm run build          # Production build
-npm run build:perf     # Production build using `.env.perf`
-npm run lint           # ESLint
-npm run check:boundaries # Feature boundary architecture check
-npm run check:deps-contracts # Enforce deps contract seam routing
-npm run check:legacy-lib-imports # Block any "@/lib/*" usage
-npm run check:deps-wrapper-health # Fail on unused pass-through deps wrappers
-npm run check:edge-budgets # Feature seam coupling budget check
-npm run report:feature-edges # Feature dependency edge report
-npm run report:feature-edges:json # JSON feature edge report
-npm run report:deps-wrapper-health:json # JSON deps wrapper health report
-npm run verify         # Boundaries + deps contracts + no-lib guard + wrapper health + edge budgets + lint + tests + build
-npm run preview:perf   # Serve the last production build on port 4173
-npm run perf           # Build + serve a local production-like perf target
-npm run test           # Vitest (watch mode)
-npm run test:run       # Vitest (single run)
-npm run test:coverage  # Vitest with coverage
-npm run routes         # Regenerate TanStack Router route tree
-```
+quality presets
 
-### Performance Checks
+low → 2 Mbps
+medium → 5 Mbps
+high → 10 Mbps
+ultra → 20 Mbps
 
-- `npm run dev` is best for correctness and iteration, but it includes React/Vite dev overhead, HMR, and repo debug instrumentation.
-- `npm run perf` is the better check for "is this a real playback issue or just dev noise?" because it serves a production build locally.
-- `npm run dev:quiet` is a lighter dev workflow when you still need HMR but want the editor debug panel hidden.
-- `npm run dev:compare` starts both `http://localhost:5173` and `http://localhost:4173` together so you can compare dev vs local production-like behavior side by side.
+📁 Media Support
 
-## Repository layout
+Import files directly from disk.
 
-```text
-src/
-|- app/                     # App bootstrap and providers
-|- domain/                  # Framework-agnostic domain logic
-|  |- animation/             # Easing functions and interpolation
-|  |- projects/              # Project domain types
-|  \- timeline/              # Transitions (engine, registry, renderers)
-|- infrastructure/          # Browser/storage/GPU adapters
-|- lib/
-|  |- gpu-effects/           # WebGPU effect pipeline + shader definitions
-|  |- gpu-transitions/       # WebGPU transition pipeline + shaders
-|  |- gpu-compositor/        # WebGPU blend mode compositor
-|  |- gpu-scopes/            # WebGPU waveform/vectorscope/histogram
-|  |- masks/                 # Mask texture management
-|  |- analysis/              # Optical flow and scene detection
-|  |- thumbnails/            # GPU-accelerated thumbnail renderer
-|  |- fonts/                 # Font loading
-|  |- shapes/                # Shape path generators
-|  \- migrations/            # Data migration system
-|- features/
-|  |- editor/                # Editor shell, toolbar, panels, stores
-|  |- timeline/              # Multi-track timeline, actions, services
-|  |- preview/               # Preview canvas, transform gizmo, GPU scopes
-|  |- player/                # Playback engine (Clock, composition)
-|  |- composition-runtime/   # Composition rendering (sequences/items/audio/transitions)
-|  |- export/                # WebCodecs export pipeline (Web Worker)
-|  |- effects/               # GPU effect system and UI panels
-|  |- keyframes/             # Keyframe animation, Bezier editor, easing
-|  |- media-library/         # Media import, metadata, OPFS proxies, transcription
-|  |- project-bundle/        # Project ZIP export/import
-|  |- projects/              # Project management
-|  \- settings/              # App settings, keyboard shortcut editor
-|- shared/                  # Shared UI/state/utilities across layers
-|- components/ui/            # shadcn/ui components
-|- config/hotkeys.ts         # Keyboard shortcut definitions
-|- routes/                   # TanStack Router (file-based)
-\- types/                    # Shared TypeScript types
-```
+Files are referenced — never uploaded.
 
-## License
+video
 
-[MIT](LICENSE)
+MP4
+WebM
+MOV
+MKV
+
+audio
+
+MP3
+WAV
+AAC
+OGG
+Opus
+
+image
+
+JPG
+PNG
+GIF
+WebP
+
+Supports files up to 5GB.
+
+Includes:
+
+• proxy video generation
+• relinking media
+• scene detection
+• optical flow analysis
+
+🧠 Transcription
+
+Local speech-to-text via Whisper running inside a Web Worker.
+
+Models available:
+
+Tiny
+Base
+Small
+Large v3 Turbo
+
+Features:
+
+• automatic captions
+• multi-language transcription
+• timeline caption items
+
+🔤 Text & Shapes
+
+Native vector overlays:
+
+rectangle
+circle
+triangle
+ellipse
+star
+polygon
+heart
+
+Custom fonts supported.
+
+💾 Project System
+
+Projects stored locally.
+
+Features:
+
+• ZIP export/import
+• schema validation
+• IndexedDB persistence
+• content-addressable storage
+• autosave
+
+🧭 Basic Workflow
+create project
+import media
+drag clips to timeline
+edit and animate
+preview in real time
+export video
+🌐 Browser Support
+
+Requires modern Chromium browser.
+
+Recommended:
+
+Chrome 113+
+Edge 113+
+
+Required APIs:
+
+WebGPU
+WebCodecs
+OPFS
+File System Access API
+
+Brave configuration
+
+Brave disables File System Access API by default.
+
+Enable:
+
+brave://flags/#file-system-access-api
+
+Set to ENABLED and relaunch.

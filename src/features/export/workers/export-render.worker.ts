@@ -13,7 +13,8 @@ import type {
 type WorkerGlobalWithWindow = typeof globalThis & { window?: typeof globalThis };
 const workerGlobal = globalThis as WorkerGlobalWithWindow;
 if (typeof workerGlobal.window === 'undefined') {
-  workerGlobal.window = workerGlobal;
+  // Dedicated workers expose `globalThis` but not `Window`; third-party code may read `window`.
+  workerGlobal.window = workerGlobal as unknown as Window & typeof globalThis;
 }
 
 const log = createLogger('ExportRenderWorker');

@@ -71,10 +71,10 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
   const mediaFullColumn = useEditorStore((s) => s.mediaFullColumn);
   const toggleMediaFullColumn = useEditorStore((s) => s.toggleMediaFullColumn);
-  const keyframeEditorOpen = useEditorStore((s) => s.keyframeEditorOpen);
   const setKeyframeEditorOpen = useEditorStore((s) => s.setKeyframeEditorOpen);
   const toggleKeyframeEditorOpen = useEditorStore((s) => s.toggleKeyframeEditorOpen);
   const activeTab = useEditorStore((s) => s.activeTab);
+  const keyframeEditorOpen = activeTab === 'keyframes';
   const setActiveTab = useEditorStore((s) => s.setActiveTab);
   const sidebarWidth = useEditorStore((s) => s.sidebarWidth);
   const setSidebarWidth = useEditorStore((s) => s.setSidebarWidth);
@@ -464,13 +464,23 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
         {/* Use Activity for React 19 performance optimization - defers updates when hidden */}
         <Activity mode={leftSidebarOpen ? 'visible' : 'hidden'}>
           <div className="h-full min-h-0 flex flex-col w-full" style={innerWidthStyle}>
-          <KeyframeGraphPanel
-            isOpen={keyframeEditorOpen}
-            onToggle={toggleKeyframeEditorOpen}
-            onClose={() => setKeyframeEditorOpen(false)}
-            placement="top"
-          />
+          <div
+            className={
+              keyframeEditorOpen
+                ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
+                : 'contents'
+            }
+          >
+            <KeyframeGraphPanel
+              isOpen={keyframeEditorOpen}
+              onToggle={toggleKeyframeEditorOpen}
+              onClose={() => setKeyframeEditorOpen(false)}
+              placement="top"
+            />
+          </div>
 
+          {!keyframeEditorOpen && (
+            <>
           {/* Panel Header — sits with the tab content, below the keyframe editor */}
           <div
             className="flex items-center justify-between px-3 border-b border-border flex-shrink-0"
@@ -793,6 +803,8 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
           <div className={`min-h-0 flex-1 overflow-hidden ${activeTab === 'ai' ? 'block' : 'hidden'}`}>
             <AiPanel />
           </div>
+            </>
+          )}
           </div>
         </Activity>
         {/* Resize Handle */}

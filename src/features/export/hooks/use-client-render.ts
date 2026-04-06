@@ -320,7 +320,8 @@ export function useClientRender(): UseClientRenderReturn {
 
           // Check codec support
           const supportedCodecs = await getSupportedCodecs({
-            resolution: clientSettings.resolution,
+            width: clientSettings.resolution.width,
+            height: clientSettings.resolution.height,
             bitrate: clientSettings.videoBitrate,
           });
 

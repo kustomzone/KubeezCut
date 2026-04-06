@@ -1,4 +1,4 @@
-import type { KubeezMediaModelOption } from './kubeez-models';
+import { filterKubeezCutCatalogModels, type KubeezMediaModelOption } from './kubeez-models';
 import { findRegistryEntryByBaseCardId, KUBEEZ_MODEL_FAMILY_REGISTRY } from './model-family-registry';
 
 /**
@@ -162,6 +162,70 @@ function imageModelFamilyMergeKey(m: KubeezMediaModelOption): string {
   return `${p}\0${base}`;
 }
 
+/**
+ * Maps `model_id` to a stable family slug for image rows that are not covered by
+ * `KUBEEZ_MODEL_FAMILY_REGISTRY` (those are partitioned out before this runs).
+ * Mirrors Kubeez web / videoaichat: one card per logical product; variants are chosen in the panel.
+ */
+function computeImageHeuristicFamilySlug(modelId: string): string | null {
+  const id = modelId.trim().toLowerCase();
+
+  if (id.startsWith('flux-2')) return 'base:flux-2';
+
+  if (id.startsWith('seedream-v4-5')) return 'base:seedream-v4-5';
+  if (id.startsWith('seedream-v4')) return 'base:seedream-v4';
+  /** ByteDance uses both `5-lite-*` and `seedream-v5-*` ids for the same product — one card (see kubeez.com). */
+  if (id.startsWith('5-lite-') || id.startsWith('seedream-v5') || id.includes('seedream-v5')) {
+    return 'base:seedream-5-lite';
+  }
+
+  if (id.startsWith('grok-text-to-image') || id.startsWith('grok-image-to-image')) return 'base:grok-image';
+  if (id.startsWith('qwen-')) return 'base:qwen-image';
+
+  if (id.startsWith('nano-banana')) {
+    if (id.startsWith('nano-banana-2') || id.startsWith('nano-banana-pro')) return null;
+    return 'base:nano-banana-legacy';
+  }
+
+  if (id.startsWith('p-image')) return 'base:p-image';
+  if (id.includes('logo-maker') || id.startsWith('logo-maker')) return 'base:logo-maker';
+
+  return null;
+}
+
+const IMAGE_HEURISTIC_FAMILY_LABEL: Record<string, string> = {
+  'base:flux-2': 'Flux 2',
+  'base:seedream-v4': 'Seedream V4',
+  'base:seedream-v4-5': 'Seedream V4.5',
+  'base:seedream-5-lite': 'Seedream 5 Lite',
+  'base:grok-image': 'Grok Image',
+  'base:qwen-image': 'Qwen Image',
+  'base:nano-banana-legacy': 'Nano Banana',
+  'base:p-image': 'P-Image Edit',
+  'base:logo-maker': 'Logo Maker',
+};
+
+function imageFamilyGroupKey(m: KubeezMediaModelOption): string {
+  const p = (m.provider ?? '').trim().toLowerCase();
+  const slug = computeImageHeuristicFamilySlug(m.model_id);
+  if (slug) return `${p}\0${slug}`;
+  return imageModelFamilyMergeKey(m);
+}
+
+function deriveImageFamilyCardTitle(groupKey: string, variants: KubeezMediaModelOption[]): string {
+  const slug = groupKey.includes('\0') ? groupKey.split('\0')[1]! : '';
+  if (slug && IMAGE_HEURISTIC_FAMILY_LABEL[slug]) {
+    return IMAGE_HEURISTIC_FAMILY_LABEL[slug]!;
+  }
+  if (variants.length === 1) return variants[0]!.display_name;
+  const sorted = [...variants].sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const firstParts = sorted.map((v) => (v.display_name.split(/\s*·\s*/)[0] ?? v.display_name).trim());
+  const unique = [...new Set(firstParts)];
+  if (unique.length === 1) return unique[0]!;
+  const head = sorted[0]!;
+  return stripTrailingImageResolutionLabel(head.display_name) || head.display_name;
+}
+
 function videoModelDisplayMergeKey(m: KubeezMediaModelOption): string {
   const p = (m.provider ?? '').trim().toLowerCase();
   const n = m.display_name.trim().toLowerCase();
@@ -211,26 +275,26 @@ function partitionRegistryFamiliesFromList(list: KubeezMediaModelOption[]): {
 function buildImageFamilyGridItems(images: KubeezMediaModelOption[]): KubeezModelGridItem[] {
   const groups = new Map<string, KubeezMediaModelOption[]>();
   for (const m of images) {
-    const k = imageModelFamilyMergeKey(m);
+    const k = imageFamilyGroupKey(m);
     const arr = groups.get(k) ?? [];
     arr.push(m);
     groups.set(k, arr);
   }
 
   const out: KubeezModelGridItem[] = [];
-  for (const variants of groups.values()) {
-    if (variants.length === 1) {
-      out.push({ kind: 'model', m: variants[0]! });
-      continue;
-    }
+  for (const [groupKey, variants] of groups) {
     const deduped = dedupeModelsById(variants);
     deduped.sort((a, b) => a.model_id.localeCompare(b.model_id));
+    if (deduped.length === 1) {
+      out.push({ kind: 'model', m: deduped[0]! });
+      continue;
+    }
     const head = deduped[0]!;
     out.push({
       kind: 'model-family',
       mediaKind: 'image',
-      familyKey: `img:${imageModelFamilyMergeKey(head)}`,
-      displayName: stripTrailingImageResolutionLabel(head.display_name) || head.display_name,
+      familyKey: `img:${groupKey}`,
+      displayName: deriveImageFamilyCardTitle(groupKey, deduped),
       provider: head.provider,
       variants: deduped,
     });
@@ -314,10 +378,11 @@ function registryFamiliesToGridItems(families: RegistryFamilyBucket[]): KubeezMo
 }
 
 export function buildKubeezModelGridItems(list: KubeezMediaModelOption[]): KubeezModelGridItem[] {
-  const images = list.filter((m) => m.mediaKind === 'image');
-  const videos = list.filter((m) => m.mediaKind === 'video');
-  const music = list.filter((m) => m.mediaKind === 'music');
-  const speech = list.filter((m) => m.mediaKind === 'speech');
+  const listFiltered = filterKubeezCutCatalogModels(list);
+  const images = listFiltered.filter((m) => m.mediaKind === 'image');
+  const videos = listFiltered.filter((m) => m.mediaKind === 'video');
+  const music = listFiltered.filter((m) => m.mediaKind === 'music');
+  const speech = listFiltered.filter((m) => m.mediaKind === 'speech');
 
   const regImg = partitionRegistryFamiliesFromList(images);
   const regVid = partitionRegistryFamiliesFromList(videos);

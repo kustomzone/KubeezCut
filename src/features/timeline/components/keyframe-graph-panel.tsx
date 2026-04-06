@@ -228,50 +228,61 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   placement = 'bottom',
 }: KeyframeGraphPanelProps) {
   const hotkeys = useResolvedHotkeys();
+  /** Left sidebar: fill column; no split with library below, no drag resize handle. */
+  const isSidebarDock = placement === 'top';
+
   // Ref to measure container width
   const containerRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  /** Measured content box height (includes p-2 padding) — used when filling the sidebar. */
+  const [containerInnerHeight, setContainerInnerHeight] = useState(0);
   const [parentHeight, setParentHeight] = useState(0);
   const hasInitialSized = useRef(false);
 
-  // Track content height (user can resize)
+  // Track content height (user can resize) — timeline/bottom dock only
   const [contentHeight, setContentHeight] = useState(MIN_CONTENT_HEIGHT);
 
-  // Dynamic max: 80% of parent minus the header and handle chrome
-  const chrome = GRAPH_PANEL_HEADER_HEIGHT + RESIZE_HANDLE_HEIGHT;
+  // Dynamic max: 80% of parent minus the header and handle chrome (bottom dock); sidebar uses flex + measure
+  const chrome = GRAPH_PANEL_HEADER_HEIGHT + (isSidebarDock ? 0 : RESIZE_HANDLE_HEIGHT);
   const maxContentHeight = parentHeight > 0
-    ? Math.max(MIN_CONTENT_HEIGHT, Math.floor(parentHeight * MAX_PARENT_RATIO) - chrome)
+    ? Math.max(
+        MIN_CONTENT_HEIGHT,
+        isSidebarDock
+          ? parentHeight - GRAPH_PANEL_HEADER_HEIGHT - 16
+          : Math.floor(parentHeight * MAX_PARENT_RATIO) - chrome,
+      )
     : MAX_CONTENT_HEIGHT_FALLBACK;
 
-  // Set default height to 60% of parent on first measurement
+  // Set default height to 60% of parent on first measurement (bottom dock only)
   useEffect(() => {
+    if (isSidebarDock) return;
     if (parentHeight > 0 && !hasInitialSized.current) {
       hasInitialSized.current = true;
-      const defaultHeight = Math.floor(parentHeight * DEFAULT_PARENT_RATIO) - chrome;
+      const bottomChrome = GRAPH_PANEL_HEADER_HEIGHT + RESIZE_HANDLE_HEIGHT;
+      const defaultHeight = Math.floor(parentHeight * DEFAULT_PARENT_RATIO) - bottomChrome;
       setContentHeight(Math.max(MIN_CONTENT_HEIGHT, Math.min(maxContentHeight, defaultHeight)));
     }
-  }, [parentHeight, chrome, maxContentHeight]);
+  }, [isSidebarDock, parentHeight, maxContentHeight]);
 
   // Resize state
   const [isResizing, setIsResizing] = useState(false);
   const resizeStartY = useRef(0);
   const resizeStartHeight = useRef(0);
 
-  // Measure container width on mount and resize
+  // Measure container width and height on mount and resize
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const updateWidth = () => {
+    const updateSize = () => {
       setContainerWidth(container.clientWidth);
+      setContainerInnerHeight(container.clientHeight);
     };
 
-    // Initial measurement
-    updateWidth();
+    updateSize();
 
-    // Use ResizeObserver to track size changes
-    const resizeObserver = new ResizeObserver(updateWidth);
+    const resizeObserver = new ResizeObserver(updateSize);
     resizeObserver.observe(container);
 
     return () => {
@@ -301,14 +312,13 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
     resizeStartHeight.current = contentHeight;
   }, [contentHeight]);
 
-  // Handle resize move and end via document events
+  // Handle resize move and end via document events (bottom dock only)
   useEffect(() => {
-    if (!isResizing) return;
+    if (isSidebarDock || !isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const deltaY = placement === 'top'
-        ? e.clientY - resizeStartY.current
-        : resizeStartY.current - e.clientY;
+      // When `!isSidebarDock`, `placement` is narrowed to `'bottom'` (resize handle is bottom-docked only).
+      const deltaY = resizeStartY.current - e.clientY;
       const newHeight = Math.min(
         maxContentHeight,
         Math.max(MIN_CONTENT_HEIGHT, resizeStartHeight.current + deltaY)
@@ -330,7 +340,7 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, placement, maxContentHeight]);
+  }, [isResizing, placement, maxContentHeight, isSidebarDock]);
 
   // Selected items
   const selectedItemIds = useSelectionStore((s) => s.selectedItemIds);
@@ -1237,11 +1247,10 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
     [selectedItemForEditor]
   );
 
-  // Clamp content height when max shrinks (e.g. parent resized smaller)
+  // Clamp content height when max shrinks (e.g. parent resized smaller) — bottom dock only
   const clampedContentHeight = Math.min(contentHeight, maxContentHeight);
 
-  // Calculate total panel height for proper flex sizing
-  // When closed, show just the header; when open, show header + resize handle + content
+  // Bottom dock: fixed total height (header + drag handle + content). Sidebar: flex fills parent.
   const panelHeight = isOpen
     ? GRAPH_PANEL_HEADER_HEIGHT + RESIZE_HANDLE_HEIGHT + clampedContentHeight
     : GRAPH_PANEL_HEADER_HEIGHT;
@@ -1250,9 +1259,11 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   const showBezierControls = selectedEditorEasing === 'cubic-bezier';
   const showSpringControls = selectedEditorEasing === 'spring';
   const showAdvancedControls = showBezierControls || showSpringControls;
+  const layoutBoxHeight =
+    isSidebarDock && containerInnerHeight > 0 ? containerInnerHeight : clampedContentHeight;
   const editorHeight = Math.max(
     0,
-    clampedContentHeight - 16 - advancedControlsHeight - (showAdvancedControls ? 8 : 0)
+    layoutBoxHeight - 16 - advancedControlsHeight - (showAdvancedControls ? 8 : 0)
   );
   // Only render the docked editor when explicitly opened from the toolbar/hotkey.
   // Selecting a clip should not surface the docked panel by itself.
@@ -1278,25 +1289,27 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
     <div
       ref={panelRef}
       className={cn(
-        'flex-shrink-0 bg-background overflow-hidden',
-        placement === 'top' ? 'border-b border-border' : 'border-t border-border',
+        isSidebarDock
+          ? 'flex flex-1 min-h-0 h-full flex-col overflow-hidden bg-background border-b border-border'
+          : 'flex-shrink-0 bg-background overflow-hidden',
+        !isSidebarDock && 'border-t border-border',
         isOpen ? 'opacity-100' : 'opacity-90',
         !isResizing && 'transition-all duration-200'
       )}
-      style={{ height: panelHeight }}
+      style={isSidebarDock ? undefined : { height: panelHeight }}
     >
       {placement === 'bottom' && resizeHandle}
 
       {/* Header bar - always visible */}
       <div
-        className="h-8 flex items-center justify-between px-3 bg-secondary/30 border-b border-border"
+        className="h-8 flex items-center justify-between gap-2 border-b border-border/50 bg-secondary/20 px-3"
       >
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">
+        <div className="flex min-w-0 flex-1 items-center">
+          <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
             Keyframe Editor
             {selectedItemForEditor && (
               <span className="ml-2 text-foreground">
-                - {selectedItemForEditor.label || selectedItemForEditor.type}
+                — {selectedItemForEditor.label || selectedItemForEditor.type}
                 <span className="ml-1 text-muted-foreground">
                   ({selectedItemForEditor.id.slice(0, 8)})
                 </span>
@@ -1305,7 +1318,7 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
           </span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-shrink-0 items-center gap-1">
           <Button
             variant={editorMode === 'graph' ? 'secondary' : 'ghost'}
             size="sm"
@@ -1425,7 +1438,11 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
 
       {/* Keyframe editor content */}
       {isOpen && (
-        <div ref={containerRef} className="p-2" style={{ height: clampedContentHeight }}>
+        <div
+          ref={containerRef}
+          className={cn('flex min-h-0 flex-col p-2', isSidebarDock && 'flex-1')}
+          style={isSidebarDock ? undefined : { height: clampedContentHeight }}
+        >
           {showAdvancedControls && (
             <div
               ref={advancedControlsRef}
@@ -1577,8 +1594,6 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
           )}
         </div>
       )}
-
-      {placement === 'top' && resizeHandle}
     </div>
   );
 });

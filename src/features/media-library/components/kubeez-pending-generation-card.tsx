@@ -11,14 +11,14 @@ function CategoryIcon({
   category: KubeezPendingGeneration['filterMimeCategory'];
   className?: string;
 }) {
-  const cls = cn('shrink-0 opacity-90', className);
+  const cls = cn('shrink-0', className);
   switch (category) {
     case 'video':
-      return <Video className={cn('text-primary', cls)} aria-hidden />;
+      return <Video className={cn('text-violet-400', cls)} aria-hidden />;
     case 'audio':
-      return <FileAudio className={cn('text-green-500', cls)} aria-hidden />;
+      return <FileAudio className={cn('text-amber-400', cls)} aria-hidden />;
     default:
-      return <ImageIcon className={cn('text-blue-500', cls)} aria-hidden />;
+      return <ImageIcon className={cn('text-sky-400', cls)} aria-hidden />;
   }
 }
 
@@ -40,26 +40,31 @@ export function KubeezPendingGenerationCard({
       <div
         data-kubeez-pending-id={pending.id}
         className={cn(
-          'panel-bg flex items-center gap-3 overflow-hidden rounded border border-dashed p-2',
-          isError ? 'border-destructive/50' : 'border-primary/40'
+          'panel-bg flex min-h-[3.25rem] items-stretch gap-3 overflow-hidden rounded-lg border border-dashed',
+          isError ? 'border-destructive/45' : 'border-primary/35'
         )}
       >
-        <div className="flex h-12 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded bg-secondary">
-          {pending.status === 'generating' ? (
-            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" aria-hidden />
-          ) : (
-            <AlertCircle className="h-5 w-5 shrink-0 text-destructive" aria-hidden />
+        <div
+          className={cn(
+            'flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 border-r border-border/50 bg-muted/40',
+            isError ? 'text-destructive' : 'text-primary'
           )}
-          <CategoryIcon category={pending.filterMimeCategory} className="h-3 w-3" />
+        >
+          {pending.status === 'generating' ? (
+            <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden />
+          ) : (
+            <AlertCircle className="h-5 w-5 shrink-0" aria-hidden />
+          )}
+          <CategoryIcon category={pending.filterMimeCategory} className="h-3.5 w-3.5 opacity-80" />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium text-foreground">
-            {isError ? 'Generation failed' : 'Generating with Kubeez…'}
+        <div className="min-w-0 flex flex-1 flex-col justify-center gap-0.5 py-2 pr-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {isError ? 'Failed' : 'Generating'}
           </p>
-          <p className="truncate text-[10px] text-muted-foreground">{pending.modelDisplayName}</p>
-          <p className="truncate text-[10px] text-muted-foreground/90">{pending.label}</p>
+          <p className="truncate text-xs font-medium text-foreground">{pending.modelDisplayName}</p>
+          <p className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">{pending.label}</p>
           {isError && pending.errorMessage && (
-            <p className="mt-0.5 line-clamp-2 text-[10px] text-destructive">{pending.errorMessage}</p>
+            <p className="line-clamp-2 text-[10px] leading-snug text-destructive">{pending.errorMessage}</p>
           )}
         </div>
         {isError && (
@@ -67,7 +72,7 @@ export function KubeezPendingGenerationCard({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 shrink-0 self-center text-muted-foreground hover:text-foreground"
             onClick={dismiss}
             aria-label="Dismiss"
           >
@@ -83,47 +88,57 @@ export function KubeezPendingGenerationCard({
       data-kubeez-pending-id={pending.id}
       className={cn(
         'group relative flex aspect-square flex-col overflow-hidden rounded-lg border-2 border-dashed panel-bg',
-        isError ? 'border-destructive/50' : 'border-primary/40'
+        isError ? 'border-destructive/45' : 'border-primary/35'
       )}
     >
-      <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-secondary via-muted to-secondary" />
-      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-2 bg-gradient-to-br from-secondary to-panel-bg px-2">
-        {pending.status === 'generating' ? (
-          <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
-        ) : (
-          <AlertCircle className="h-10 w-10 text-destructive" aria-hidden />
+      {/* Fixed-height status strip — avoids overlap with details below */}
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-2 py-1.5',
+          isError ? 'bg-destructive/10' : 'bg-muted/40'
         )}
-        <CategoryIcon category={pending.filterMimeCategory} className="h-8 w-8" />
-        <p className="text-center text-[10px] font-medium text-foreground px-1">
-          {isError ? 'Generation failed' : 'Generating…'}
-        </p>
-      </div>
-      <div className="flex-shrink-0 border-t border-border/60 bg-panel-bg/80 px-1.5 py-1">
-        <div className="flex items-start justify-between gap-1">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[10px] font-medium text-foreground">{pending.modelDisplayName}</p>
-            <p className="line-clamp-2 text-[9px] text-muted-foreground">{pending.label}</p>
-            {isError && pending.errorMessage && (
-              <p className="mt-0.5 line-clamp-2 text-[9px] text-destructive">{pending.errorMessage}</p>
-            )}
-          </div>
-          {isError && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation();
-                dismiss();
-              }}
-              aria-label="Dismiss"
-            >
-              <X className="h-3 w-3" />
-            </Button>
+      >
+        <div className="flex min-w-0 items-center gap-1.5">
+          {pending.status === 'generating' ? (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-hidden />
+          ) : (
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden />
           )}
+          <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {isError ? 'Failed' : 'Generating'}
+          </span>
         </div>
+        <CategoryIcon category={pending.filterMimeCategory} className="h-4 w-4 opacity-90" />
       </div>
+
+      {/* Model + prompt — scroll if extremely long; no competing “Generating” line here */}
+      <div className="flex min-h-0 flex-1 flex-col justify-center gap-1.5 overflow-hidden px-2.5 py-2">
+        <p className="line-clamp-2 text-left text-[11px] font-semibold leading-snug text-foreground">
+          {pending.modelDisplayName}
+        </p>
+        <p className="line-clamp-3 text-left text-[10px] leading-snug text-muted-foreground">{pending.label}</p>
+        {isError && pending.errorMessage && (
+          <p className="line-clamp-2 text-left text-[10px] leading-snug text-destructive">{pending.errorMessage}</p>
+        )}
+      </div>
+
+      {isError && (
+        <div className="flex shrink-0 justify-end border-t border-border/50 px-1 py-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation();
+              dismiss();
+            }}
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

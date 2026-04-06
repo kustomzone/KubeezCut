@@ -1,10 +1,15 @@
-import { memo, useEffect, useMemo, useState, type MutableRefObject, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type MutableRefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { KubeezMediaModelOption } from '@/infrastructure/kubeez/kubeez-models';
+import {
+  kubeezModelCardGradientBackground,
+  pickFirstCardImageUrl,
+  resolveKubeezModelCardHeroUrl,
+} from '@/infrastructure/kubeez/kubeez-model-card-visual';
 import { areModelsEquivalent } from '@/infrastructure/kubeez/model-equivalence';
 import {
   defaultModelSettings,
@@ -12,6 +17,7 @@ import {
   type KubeezModelSettings,
 } from '@/infrastructure/kubeez/model-family-registry';
 import { resolveGenerationModelId } from '@/infrastructure/kubeez/model-resolve';
+import { getVideoAspectUi } from '@/infrastructure/kubeez/kubeez-video-aspect-ui';
 import {
   buildKubeezModelGridItems,
   collectVideoFamilyAxes,
@@ -28,15 +34,9 @@ import { cn } from '@/shared/ui/cn';
 
 export type ModelTab = 'all' | 'image' | 'video' | 'music' | 'speech';
 
+/** Wide catalog-first layout: dense columns so browsing stays primary. */
 const MODEL_GRID_CLASS =
-  'grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-1 lg:gap-3 xl:grid-cols-2';
-
-function modelTabForKind(k: KubeezMediaModelOption['mediaKind']): ModelTab {
-  if (k === 'image') return 'image';
-  if (k === 'video') return 'video';
-  if (k === 'music') return 'music';
-  return 'speech';
-}
+  'grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5';
 
 function modelMatchesSearch(m: KubeezMediaModelOption, needle: string): boolean {
   if (!needle) return true;
@@ -53,7 +53,6 @@ export interface KubeezGenerateModelsColumnProps {
   musicModels: KubeezMediaModelOption[];
   speechModels: KubeezMediaModelOption[];
   allModelsSorted: KubeezMediaModelOption[];
-  allModelsCount: number;
   modelTab: ModelTab;
   onModelTabChange: (tab: ModelTab) => void;
   selectedModelId: string;
@@ -76,28 +75,77 @@ function kindLabelText(kind: KubeezMediaModelOption['mediaKind']) {
   return 'Image';
 }
 
+/** First segment before " · " so cards don’t repeat long catalog subtitles in the title. */
+function modelCardPrimaryTitle(m: KubeezMediaModelOption): string {
+  const raw = m.display_name.trim();
+  const head = raw.split(/\s*·\s*/)[0]?.trim();
+  return head && head.length > 0 ? head : raw;
+}
+
+function isEditLikeImageModel(m: KubeezMediaModelOption): boolean {
+  const s = `${m.model_id} ${m.display_name}`.toLowerCase();
+  return /\b(edit|image-to-image|image to image|p-image-edit)\b/.test(s);
+}
+
+/** One short line: what the user does next (not resolution lists or provider marketing). */
+function modelTaskHint(m: KubeezMediaModelOption): string {
+  const k = m.mediaKind;
+  if (k === 'speech') return 'Type dialogue and pick voices';
+  if (k === 'music') {
+    const dn = m.display_name.toLowerCase();
+    if (dn.includes('lyrics')) return 'Generate lyrics';
+    if (dn.includes('instrumental')) return 'Add instrumental';
+    if (dn.includes('vocal')) return 'Add or transform vocals';
+    return 'Describe your track';
+  }
+  if (k === 'video') {
+    const t2v = m.supportsTextToVideo === true;
+    const i2v = m.supportsImageToVideo === true;
+    if (t2v && i2v) return 'Prompt or start from an image';
+    if (i2v && !t2v) return 'Animate from an image';
+    return 'Describe the motion';
+  }
+  if (isEditLikeImageModel(m)) return 'Edit with prompt and image';
+  return 'Write a prompt';
+}
+
+function familyTaskHint(item: KubeezModelFamilyGridItem): string {
+  if (item.variants.length === 0) return 'Write a prompt';
+  if (item.variants.length === 1) return modelTaskHint(item.variants[0]!);
+  if (item.mediaKind === 'image') {
+    const anyEdit = item.variants.some(isEditLikeImageModel);
+    const anyNotEdit = item.variants.some((v) => !isEditLikeImageModel(v));
+    if (anyEdit && anyNotEdit) return 'Create new images or edit shots';
+  }
+  return modelTaskHint(pickDefaultVariant(item.variants));
+}
+
 function ModelCardShell(props: {
   accent: 'video' | 'music' | 'speech' | 'image';
   kindLabel: string;
   title: string;
-  subtitle: ReactNode;
+  /** Single short line under the title — user-facing “what to do”. */
+  taskHint: string;
+  /** Optional e.g. `3 cr` or `2–8 cr` (tilde added by shell). */
+  costLabel?: string | null;
+  heroImageUrl?: string | null;
+  gradientKey: string;
   selected: boolean;
-  footer?: ReactNode;
   onSelect?: () => void;
   disabled: boolean;
-  fixedHeight: boolean;
   ariaSelected?: boolean;
 }) {
   const {
     accent,
     kindLabel,
     title,
-    subtitle,
+    taskHint,
+    costLabel,
+    heroImageUrl,
+    gradientKey,
     selected,
-    footer,
     onSelect,
     disabled,
-    fixedHeight,
     ariaSelected,
   } = props;
   const isVideo = accent === 'video';
@@ -105,58 +153,83 @@ function ModelCardShell(props: {
   const isSpeech = accent === 'speech';
   const isImage = accent === 'image';
 
+  const heroIcon = isVideo ? (
+    <Clapperboard className="h-6 w-6" strokeWidth={1.25} />
+  ) : isMusic ? (
+    <Music2 className="h-6 w-6" strokeWidth={1.25} />
+  ) : isSpeech ? (
+    <Mic className="h-6 w-6" strokeWidth={1.25} />
+  ) : (
+    <ImageIcon className="h-6 w-6" strokeWidth={1.25} />
+  );
+
   const body = (
     <>
-      <div
-        className={cn(
-          'absolute inset-x-0 top-0 z-10 h-[3px] rounded-t-2xl opacity-95',
-          isVideo && 'bg-gradient-to-r from-violet-500 via-fuchsia-500 to-violet-400',
-          isMusic && 'bg-gradient-to-r from-primary via-blue-400 to-primary',
-          isSpeech && 'bg-gradient-to-r from-sky-500 via-cyan-400 to-sky-400',
-          isImage && 'bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400'
+      <div className="relative aspect-[2/1] w-full shrink-0 overflow-hidden bg-muted/50">
+        {heroImageUrl ? (
+          <img
+            src={heroImageUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{ background: kubeezModelCardGradientBackground(gradientKey) }}
+          />
         )}
-        aria-hidden
-      />
-      {selected && (
+        <div className="absolute inset-0 bg-gradient-to-t from-background/95 via-background/30 to-transparent" />
+        {!heroImageUrl && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-white/35">
+            {heroIcon}
+          </div>
+        )}
         <span
           className={cn(
-            'absolute right-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-full shadow-md ring-2 ring-background',
-            isVideo && 'bg-violet-600 text-white',
-            isMusic && 'bg-amber-600 text-white',
-            isSpeech && 'bg-sky-600 text-white',
-            isImage && 'bg-primary text-primary-foreground'
+            'absolute left-1.5 top-1.5 z-10 rounded-full border px-1.5 py-px text-[8px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-sm',
+            isVideo && 'border-violet-500/30 bg-violet-950/55 text-violet-100',
+            isMusic && 'border-amber-500/30 bg-amber-950/55 text-amber-100',
+            isSpeech && 'border-sky-500/30 bg-sky-950/55 text-sky-100',
+            isImage && 'border-emerald-500/30 bg-emerald-950/55 text-emerald-100'
           )}
         >
-          <Check className="h-3.5 w-3.5" strokeWidth={3} />
+          {kindLabel}
         </span>
-      )}
-      <div className="relative z-0 flex min-h-0 flex-1 flex-col px-3.5 pb-2.5 pt-3.5">
-        <div className="flex min-h-0 flex-1 gap-2 pr-8">
+        {selected && (
           <span
             className={cn(
-              'h-fit shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider',
-              isVideo && 'border-violet-500/25 bg-violet-500/12 text-violet-700 dark:text-violet-200',
-              isMusic && 'border-amber-500/25 bg-amber-500/12 text-amber-900 dark:text-amber-100',
-              isSpeech && 'border-sky-500/25 bg-sky-500/12 text-sky-900 dark:text-sky-100',
-              isImage && 'border-emerald-500/25 bg-emerald-500/12 text-emerald-800 dark:text-emerald-200'
+              'absolute right-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full shadow-md ring-2 ring-background',
+              isVideo && 'bg-violet-600 text-white',
+              isMusic && 'bg-amber-600 text-white',
+              isSpeech && 'bg-sky-600 text-white',
+              isImage && 'bg-primary text-primary-foreground'
             )}
           >
-            {kindLabel}
+            <Check className="h-3 w-3" strokeWidth={3} />
           </span>
-          <span className="min-h-[2.5rem] min-w-0 text-sm font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
-            {title}
-          </span>
+        )}
+      </div>
+      <div className="relative z-0 flex min-h-0 flex-1 flex-col justify-center gap-0.5 bg-gradient-to-b from-card/98 to-muted/20 px-2 pb-1.5 pt-1">
+        <span className="line-clamp-1 text-left text-[12px] font-semibold leading-tight tracking-tight text-foreground">
+          {title}
+        </span>
+        <div className="flex items-start justify-between gap-2">
+          <p className="line-clamp-2 min-w-0 flex-1 text-[10px] leading-snug text-muted-foreground">{taskHint}</p>
+          {costLabel ? (
+            <span className="shrink-0 pt-px text-[9px] tabular-nums text-muted-foreground/85" title="Approx. credits">
+              ~{costLabel}
+            </span>
+          ) : null}
         </div>
-        {subtitle ? <div className="mt-0.5 text-[10px] text-muted-foreground/90">{subtitle}</div> : null}
-        {footer}
       </div>
     </>
   );
 
   const frameClass = cn(
-    'group relative flex w-full flex-col overflow-hidden rounded-2xl border text-left',
-    fixedHeight ? 'h-[9.5rem]' : 'min-h-[9.5rem] py-0.5',
-    'border-border/60 bg-gradient-to-b from-card via-card/95 to-muted/25',
+    'group relative flex w-full min-h-0 flex-col overflow-hidden rounded-lg border text-left',
+    'border-border/60 bg-card',
     'shadow-[inset_0_1px_0_0_oklch(1_0_0_/0.06),0_10px_36px_-14px_rgba(0,0,0,0.48)]',
     'transition-[transform,box-shadow,border-color,background] duration-200',
     onSelect && 'hover:-translate-y-px hover:border-border/90 hover:shadow-[inset_0_1px_0_0_oklch(1_0_0_/0.07),0_14px_44px_-12px_rgba(0,0,0,0.52)]',
@@ -165,25 +238,23 @@ function ModelCardShell(props: {
     disabled && 'pointer-events-none opacity-50',
     selected &&
       isVideo &&
-      'border-violet-400/50 bg-gradient-to-b from-violet-500/18 via-card to-violet-950/25 shadow-lg shadow-violet-500/20 ring-1 ring-violet-400/35 dark:border-violet-500/45',
+      'border-violet-400/50 shadow-lg shadow-violet-500/20 ring-1 ring-violet-400/35 dark:border-violet-500/45',
     selected &&
       isMusic &&
-      'border-amber-400/50 bg-gradient-to-b from-amber-500/18 via-card to-amber-950/20 shadow-lg shadow-amber-500/20 ring-1 ring-amber-400/35 dark:border-amber-500/45',
+      'border-amber-400/50 shadow-lg shadow-amber-500/20 ring-1 ring-amber-400/35 dark:border-amber-500/45',
     selected &&
       isSpeech &&
-      'border-sky-400/50 bg-gradient-to-b from-sky-500/18 via-card to-sky-950/20 shadow-lg shadow-sky-500/20 ring-1 ring-sky-400/35 dark:border-sky-500/45',
-    selected &&
-      isImage &&
-      'border-primary/50 bg-gradient-to-b from-primary/14 via-card to-primary/5 shadow-lg shadow-primary/20 ring-1 ring-primary/40',
+      'border-sky-400/50 shadow-lg shadow-sky-500/20 ring-1 ring-sky-400/35 dark:border-sky-500/45',
+    selected && isImage && 'border-primary/50 shadow-lg shadow-primary/20 ring-1 ring-primary/40',
     !selected &&
       isVideo &&
-      'border-violet-500/20 bg-gradient-to-b from-violet-500/[0.07] via-card to-transparent dark:border-violet-800/40',
+      'border-violet-500/20 dark:border-violet-800/40',
     !selected &&
       isMusic &&
-      'border-amber-500/20 bg-gradient-to-b from-amber-500/[0.07] via-card to-transparent dark:border-amber-800/35',
+      'border-amber-500/20 dark:border-amber-800/35',
     !selected &&
       isSpeech &&
-      'border-sky-500/20 bg-gradient-to-b from-sky-500/[0.07] via-card to-transparent dark:border-sky-800/35',
+      'border-sky-500/20 dark:border-sky-800/35',
     !selected && isImage && 'border-border/50'
   );
 
@@ -237,9 +308,14 @@ function FamilyModelCard(props: {
       accent={accent}
       kindLabel={kindLabel}
       title={item.displayName}
-      subtitle={null}
+      taskHint={familyTaskHint(item)}
+      costLabel={rangeLabel}
+      heroImageUrl={resolveKubeezModelCardHeroUrl(pickDefaultVariant(item.variants).model_id, {
+        baseCardId: item.baseCardId,
+        apiCardImageUrl: pickFirstCardImageUrl(item.variants),
+      })}
+      gradientKey={item.baseCardId ?? item.familyKey}
       selected={selected}
-      fixedHeight
       ariaSelected={selected}
       onSelect={() => {
         if (!selected) {
@@ -259,19 +335,6 @@ function FamilyModelCard(props: {
         }
       }}
       disabled={disabled}
-      footer={
-        (item.provider || rangeLabel) && (
-          <div className="mt-auto border-t border-border/40 pt-2">
-            <p className="line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
-              {item.provider && <span>{item.provider}</span>}
-              {item.provider && rangeLabel && <span className="text-muted-foreground/40"> · </span>}
-              {rangeLabel && (
-                <span className="tabular-nums text-foreground/60">~{rangeLabel}</span>
-              )}
-            </p>
-          </div>
-        )
-      }
     />
   );
 }
@@ -294,9 +357,14 @@ function kindBadgeClass(kind: KubeezMediaModelOption['mediaKind']) {
 export interface KubeezGenerateSelectedModelPanelProps {
   model: KubeezMediaModelOption | null;
   selectedModelId: string;
+  /** Concrete `model_id` used for POST /v1/generate/media (may differ from selection when a family resolves). */
+  resolvedModelId: string;
   onSelectModelId: (id: string) => void;
   modelSettings: KubeezModelSettings;
   onPatchModelSettings: (patch: Partial<KubeezModelSettings>) => void;
+  /** Local dialog state — not encoded in `model_id`. */
+  videoAspectRatio?: string;
+  onVideoAspectRatioChange: (next: string) => void;
   modelFamilyItem: KubeezModelFamilyGridItem | null;
   videoFooterHint: string | null;
   busy: boolean;
@@ -306,9 +374,12 @@ export interface KubeezGenerateSelectedModelPanelProps {
 export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSelectedModelPanel({
   model,
   selectedModelId,
+  resolvedModelId,
   onSelectModelId,
   modelSettings,
   onPatchModelSettings,
+  videoAspectRatio: videoAspectRatioProp,
+  onVideoAspectRatioChange,
   modelFamilyItem,
   videoFooterHint,
   busy,
@@ -421,8 +492,14 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
     duration: '5s' as const,
     resolution: '1080p' as const,
   };
-  const sunoEngine = modelSettings.sunoEngine ?? 'V5_5';
-  const sunoTool = modelSettings.sunoTool ?? 'instrumental';
+  const musicEngine = modelSettings.sunoEngine ?? 'V5_5';
+  const musicTool = modelSettings.sunoTool ?? 'instrumental';
+
+  const videoAspectUi = useMemo(() => {
+    if (model?.mediaKind !== 'video') return null;
+    return getVideoAspectUi(resolvedModelId, { veoMode: veo31.mode });
+  }, [model?.mediaKind, resolvedModelId, veo31.mode]);
+  const videoAspectValue = videoAspectRatioProp ?? videoAspectUi?.defaultValue;
   const sora2ModeRows =
     sora2.tier === 'pro'
       ? ([
@@ -450,11 +527,11 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
   }
 
   return (
-    <div className="shrink-0 space-y-3 rounded-xl border border-border/60 bg-muted/15 px-3 py-3 shadow-inner shadow-black/10">
+    <div className="shrink-0 space-y-2 rounded-lg border border-border/60 bg-muted/15 px-2.5 py-2 shadow-inner shadow-black/10">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Selected model</p>
-          <p className="text-sm font-semibold leading-snug text-foreground">{model.display_name}</p>
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Selected model</p>
+          <p className="text-[13px] font-semibold leading-snug text-foreground">{model.display_name}</p>
           <div className="flex flex-wrap items-center gap-2">
             <span className={kindBadgeClass(model.mediaKind)}>{kindLabelText(model.mediaKind)}</span>
             {(model.provider || costLabel) && (
@@ -972,6 +1049,7 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
               {(
                 [
                   { tier: 'fast' as const, label: 'Fast' },
+                  { tier: 'lite' as const, label: 'Lite' },
                   { tier: 'quality' as const, label: 'Quality' },
                 ] as const
               ).map(({ tier, label }) => {
@@ -986,9 +1064,10 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
                     className="h-7 min-w-[4.5rem] px-2 text-[11px]"
                     onClick={() => {
                       let mode = veo31.mode;
-                      if (tier === 'quality' && mode === 'reference-to-video') {
+                      if ((tier === 'quality' || tier === 'lite') && mode === 'reference-to-video') {
                         mode = 'text-to-video';
                       }
+                      onVideoAspectRatioChange('16:9');
                       onPatchModelSettings({ veo31: { ...veo31, tier, mode } });
                     }}
                   >
@@ -1016,7 +1095,10 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
                     variant={active ? 'default' : 'outline'}
                     disabled={disabled}
                     className="h-7 min-w-[5rem] px-2 text-[11px]"
-                    onClick={() => onPatchModelSettings({ veo31: { ...veo31, mode } })}
+                    onClick={() => {
+                      onVideoAspectRatioChange('16:9');
+                      onPatchModelSettings({ veo31: { ...veo31, mode } });
+                    }}
                   >
                     {label}
                   </Button>
@@ -1029,9 +1111,10 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
                   variant={veo31.mode === 'reference-to-video' ? 'default' : 'outline'}
                   disabled={disabled}
                   className="h-7 min-w-[5rem] px-2 text-[11px]"
-                  onClick={() =>
-                    onPatchModelSettings({ veo31: { ...veo31, mode: 'reference-to-video' } })
-                  }
+                  onClick={() => {
+                    onVideoAspectRatioChange('16:9');
+                    onPatchModelSettings({ veo31: { ...veo31, mode: 'reference-to-video' } });
+                  }}
                 >
                   Reference
                 </Button>
@@ -1166,7 +1249,7 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
                 { id: 'V5_5' as const, label: 'V5.5' },
               ] as const
             ).map(({ id, label }) => {
-              const active = sunoEngine === id;
+              const active = musicEngine === id;
               return (
                 <Button
                   key={id}
@@ -1196,7 +1279,7 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
                 { id: 'lyrics' as const, label: 'Lyrics' },
               ] as const
             ).map(({ id, label }) => {
-              const active = sunoTool === id;
+              const active = musicTool === id;
               return (
                 <Button
                   key={id}
@@ -1308,6 +1391,37 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
         </div>
       )}
 
+      {videoAspectUi && model.mediaKind === 'video' ? (
+        <div className="space-y-2 border-t border-border/50 pt-3">
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Aspect ratio</p>
+          <div className="flex flex-wrap gap-1">
+            {videoAspectUi.options.map((opt) => {
+              const active = videoAspectValue === opt.value;
+              return (
+                <Button
+                  key={String(opt.value)}
+                  type="button"
+                  size="sm"
+                  variant={active ? 'default' : 'outline'}
+                  disabled={disabled || videoAspectUi.force16x9}
+                  className="h-7 min-w-[2.75rem] px-2 text-[11px]"
+                  onClick={() =>
+                    onVideoAspectRatioChange(opt.value === 'auto' ? 'auto' : opt.value)
+                  }
+                >
+                  {opt.label}
+                </Button>
+              );
+            })}
+          </div>
+          {videoAspectUi.force16x9 ? (
+            <p className="text-[10px] leading-snug text-muted-foreground">
+              Reference mode requires 16:9 (Kubeez API).
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {showSimpleVariantRow && (
         <div className="space-y-1.5 border-t border-border/50 pt-3">
           <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Variant</p>
@@ -1399,26 +1513,15 @@ function ModelGrid(props: {
             key={m.model_id}
             accent={accent}
             kindLabel={kindLabel}
-            title={m.display_name}
-            subtitle={null}
+            title={modelCardPrimaryTitle(m)}
+            taskHint={modelTaskHint(m)}
+            costLabel={costLabel}
+            heroImageUrl={resolveKubeezModelCardHeroUrl(m.model_id, { apiCardImageUrl: m.cardImageUrl })}
+            gradientKey={m.model_id}
             selected={selected}
-            fixedHeight
             ariaSelected={selected}
             onSelect={() => onSelectModelId(m.model_id)}
             disabled={busy || modelsLoading}
-            footer={
-              (m.provider || costLabel) && (
-                <div className="mt-auto border-t border-border/40 pt-2">
-                  <p className="line-clamp-2 text-[10px] leading-relaxed text-muted-foreground">
-                    {m.provider && <span>{m.provider}</span>}
-                    {m.provider && costLabel && <span className="text-muted-foreground/40"> · </span>}
-                    {costLabel && (
-                      <span className="tabular-nums text-foreground/60">~{costLabel}</span>
-                    )}
-                  </p>
-                </div>
-              )
-            }
           />
         );
       })}
@@ -1434,7 +1537,6 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
   musicModels,
   speechModels,
   allModelsSorted,
-  allModelsCount,
   modelTab,
   onModelTabChange,
   selectedModelId,
@@ -1444,6 +1546,18 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
 }: KubeezGenerateModelsColumnProps) {
   const [modelSearch, setModelSearch] = useState('');
   const searchNeedle = modelSearch.trim();
+
+  /** Tab badges: collapsed grid cards (families), not raw API row counts. */
+  const gridCardCounts = useMemo(
+    () => ({
+      all: buildKubeezModelGridItems(allModelsSorted).length,
+      image: buildKubeezModelGridItems(imageModels).length,
+      video: buildKubeezModelGridItems(videoModels).length,
+      music: buildKubeezModelGridItems(musicModels).length,
+      speech: buildKubeezModelGridItems(speechModels).length,
+    }),
+    [allModelsSorted, imageModels, videoModels, musicModels, speechModels]
+  );
 
   const filteredLists = useMemo(() => {
     const f = (list: KubeezMediaModelOption[]) =>
@@ -1479,24 +1593,15 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
             ? gridItemsByTab.music
             : gridItemsByTab.speech;
 
-  const selectionVisible = filteredGridItems.some((item) =>
-    kubeezModelGridItemContainsModelId(item, selectedModelId)
-  );
-  const selectedModel =
-    [...imageModels, ...videoModels, ...musicModels, ...speechModels].find(
-      (m) => m.model_id === selectedModelId
-    ) ?? null;
-  const selectionNotInTab = Boolean(selectedModel && !selectionVisible);
-
   return (
-    <div className="flex min-h-0 max-h-[min(42vh,320px)] flex-col border-b border-border pb-4 lg:max-h-none lg:min-h-0 lg:w-[min(100%,30rem)] lg:max-w-[38%] lg:flex-none lg:border-b-0 lg:border-r lg:pb-0 lg:pr-6">
+    <div className="flex min-h-0 max-h-[min(42vh,320px)] flex-1 flex-col border-b border-border pb-4 lg:max-h-none lg:min-h-0 lg:min-w-0 lg:border-b-0 lg:border-r lg:border-border/60 lg:pb-0 lg:pr-4">
       {missingKey && (
         <p className="mb-2 shrink-0 text-sm text-muted-foreground">
-          Add an API key in{' '}
+          Browse the full Kubeez catalog below (same models as kubeez.com). Add an API key in{' '}
           <Link to="/settings" className="text-primary underline underline-offset-2">
             Settings
           </Link>{' '}
-          to load live models and generate.
+          to sync live models from the API and generate.
         </p>
       )}
 
@@ -1506,7 +1611,9 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
 
       <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <Label id="kubeez-model-label">Models</Label>
+          <Label id="kubeez-model-label" className="text-sm font-medium">
+            Models
+          </Label>
           {modelsLoading && (
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -1524,27 +1631,27 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
             <TabsTrigger value="all" className="gap-1.5 px-2.5 sm:px-3">
               <LayoutGrid className="h-3.5 w-3.5 opacity-70" />
               All
-              <span className="tabular-nums text-muted-foreground">({allModelsCount})</span>
+              <span className="tabular-nums text-muted-foreground">({gridCardCounts.all})</span>
             </TabsTrigger>
             <TabsTrigger value="image" className="gap-1.5 px-2.5 sm:px-3">
               <ImageIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
               Image
-              <span className="tabular-nums text-muted-foreground">({imageModels.length})</span>
+              <span className="tabular-nums text-muted-foreground">({gridCardCounts.image})</span>
             </TabsTrigger>
             <TabsTrigger value="video" className="gap-1.5 px-2.5 sm:px-3">
               <Clapperboard className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
               Video
-              <span className="tabular-nums text-muted-foreground">({videoModels.length})</span>
+              <span className="tabular-nums text-muted-foreground">({gridCardCounts.video})</span>
             </TabsTrigger>
             <TabsTrigger value="music" className="gap-1.5 px-2.5 sm:px-3">
               <Music2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
               Music
-              <span className="tabular-nums text-muted-foreground">({musicModels.length})</span>
+              <span className="tabular-nums text-muted-foreground">({gridCardCounts.music})</span>
             </TabsTrigger>
             <TabsTrigger value="speech" className="gap-1.5 px-2.5 sm:px-3">
               <Mic className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
               Speech
-              <span className="tabular-nums text-muted-foreground">({speechModels.length})</span>
+              <span className="tabular-nums text-muted-foreground">({gridCardCounts.speech})</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1569,58 +1676,6 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
               </p>
             )}
           </div>
-
-          {selectionNotInTab && selectedModel && (
-            <div className="mt-2 flex shrink-0 flex-col gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Selected:</span> {selectedModel.display_name}
-                <span
-                  className={cn(
-                    'ml-1.5 rounded px-1 py-px text-[10px] font-semibold uppercase',
-                    selectedModel.mediaKind === 'video' &&
-                      'bg-violet-500/20 text-violet-800 dark:text-violet-200',
-                    selectedModel.mediaKind === 'image' &&
-                      'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200',
-                    selectedModel.mediaKind === 'music' &&
-                      'bg-amber-500/20 text-amber-900 dark:text-amber-100',
-                    selectedModel.mediaKind === 'speech' &&
-                      'bg-sky-500/20 text-sky-900 dark:text-sky-100'
-                  )}
-                >
-                  {selectedModel.mediaKind === 'video'
-                    ? 'Video'
-                    : selectedModel.mediaKind === 'music'
-                      ? 'Music'
-                      : selectedModel.mediaKind === 'speech'
-                        ? 'Speech'
-                        : 'Image'}
-                </span>
-                <span className="text-muted-foreground"> — not listed in this tab.</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => onModelTabChange(modelTabForKind(selectedModel.mediaKind))}
-                >
-                  Open{' '}
-                  {selectedModel.mediaKind === 'video'
-                    ? 'Video'
-                    : selectedModel.mediaKind === 'music'
-                      ? 'Music'
-                      : selectedModel.mediaKind === 'speech'
-                        ? 'Speech'
-                        : 'Image'}{' '}
-                  tab
-                </Button>
-                <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => onModelTabChange('all')}>
-                  All models
-                </Button>
-              </div>
-            </div>
-          )}
 
           <TabsContent value="all" className="mt-2 min-h-0 flex-1 overflow-hidden data-[state=inactive]:hidden">
             <div className="h-full max-h-full overflow-y-auto overflow-x-hidden pr-1 [scrollbar-gutter:stable]">
@@ -1679,7 +1734,7 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
                 emptyHint={
                   searchNeedle && musicModels.length > 0
                     ? 'No models match your search. Try another term or clear the filter.'
-                    : 'No music models from the API; built-in Suno engine ids (V5, V4…) are used instead.'
+                    : 'No music models from the API; built-in engine ids (V5, V4…) are used instead.'
                 }
                 selectedModelId={selectedModelId}
                 onSelectModelId={onSelectModelId}
@@ -1753,9 +1808,9 @@ export function KubeezGeneratePromptField({
           promptRef.current = v;
         }}
         placeholder={placeholder}
-        rows={5}
+        rows={4}
         disabled={disabled}
-        className="max-h-52 min-h-[6.75rem] resize-none border-border/70 bg-card/50 shadow-inner shadow-black/10"
+        className="max-h-40 min-h-[5.25rem] resize-y border-border/70 bg-card/50 text-sm shadow-inner shadow-black/10"
       />
       {maxChars !== undefined && (
         <p className="text-[10px] text-muted-foreground tabular-nums">

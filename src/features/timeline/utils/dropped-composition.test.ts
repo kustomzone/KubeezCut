@@ -49,7 +49,7 @@ describe('dropped-composition', () => {
         items: [
           {
             id: 'child-video',
-            type: 'composition',
+            type: 'composition' as const,
             trackId: 'child-v1',
             from: 0,
             durationInFrames: 40,
@@ -66,7 +66,7 @@ describe('dropped-composition', () => {
           },
           {
             id: 'child-audio',
-            type: 'audio',
+            type: 'audio' as const,
             trackId: 'child-a1',
             from: 0,
             durationInFrames: 40,
@@ -93,7 +93,7 @@ describe('dropped-composition', () => {
         tracks: [makeTrack({ id: 'grand-a1', name: 'A1', kind: 'audio', order: 0 })],
         items: [{
           id: 'grand-audio',
-          type: 'audio',
+          type: 'audio' as const,
           trackId: 'grand-a1',
           from: 0,
           durationInFrames: 40,
@@ -120,7 +120,7 @@ describe('dropped-composition', () => {
       items: [
         {
           id: 'nested-child',
-          type: 'composition',
+          type: 'composition' as const,
           trackId: 'parent-v1',
           from: 0,
           durationInFrames: 40,

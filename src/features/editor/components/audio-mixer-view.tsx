@@ -499,19 +499,23 @@ const ChannelStrip = memo(function ChannelStrip({
               height="0%"
               scanning={showScanningFallback}
               fillRef={leftBarRef}
-              fillProps={{
-                'data-track-id': track.id,
-                'data-track-channel': 'left',
-              }}
+              fillProps={
+                {
+                  'data-track-id': track.id,
+                  'data-track-channel': 'left',
+                } as HTMLAttributes<HTMLDivElement>
+              }
             />
             <SegmentedMeterBar
               height="0%"
               scanning={showScanningFallback}
               fillRef={rightBarRef}
-              fillProps={{
-                'data-track-id': track.id,
-                'data-track-channel': 'right',
-              }}
+              fillProps={
+                {
+                  'data-track-id': track.id,
+                  'data-track-channel': 'right',
+                } as HTMLAttributes<HTMLDivElement>
+              }
             />
           </div>
 

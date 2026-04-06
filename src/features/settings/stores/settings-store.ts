@@ -24,6 +24,8 @@ interface AppSettings {
   snapEnabled: boolean;
   showWaveforms: boolean;
   showFilmstrips: boolean;
+  /** Default frame rate for new projects */
+  defaultFps: number;
 
   // Interface
   editorDensity: EditorDensityPresetName;
@@ -31,6 +33,16 @@ interface AppSettings {
   // Performance
   maxUndoHistory: number;
   autoSaveInterval: number; // minutes (0 = disabled)
+
+  /** Default export container / codec family */
+  defaultExportFormat: 'mp4' | 'webm';
+  /** Default export quality preset */
+  defaultExportQuality: 'low' | 'medium' | 'high' | 'ultra';
+
+  /** Kubeez API key for generate-from-editor (optional) */
+  kubeezApiKey: string;
+  /** Optional Kubeez API base URL override */
+  kubeezApiBaseUrl: string;
   // Whisper defaults
   defaultWhisperModel: MediaTranscriptModel;
   defaultWhisperQuantization: MediaTranscriptQuantization;
@@ -70,6 +82,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   snapEnabled: true,
   showWaveforms: true,
   showFilmstrips: true,
+  defaultFps: 30,
 
   // Interface
   editorDensity: DEFAULT_EDITOR_DENSITY_PRESET,
@@ -77,6 +90,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   // Performance
   maxUndoHistory: 50,
   autoSaveInterval: 0, // Auto-save disabled by default
+
+  defaultExportFormat: 'mp4',
+  defaultExportQuality: 'high',
+
+  kubeezApiKey: '',
+  kubeezApiBaseUrl: '',
   // Whisper defaults
   defaultWhisperModel: DEFAULT_WHISPER_MODEL,
   defaultWhisperQuantization: DEFAULT_WHISPER_QUANTIZATION,

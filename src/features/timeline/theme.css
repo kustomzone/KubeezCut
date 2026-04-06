@@ -178,6 +178,26 @@ body.timeline-item-drag-cursor-not-allowed * {
   background: transparent;
 }
 
+/*
+ * Keyframe dopesheet (sheet view): hide native horizontal scrollbar;
+ * CompactNavigator at the bottom pans/zooms; wheel/trackpad still scroll horizontally.
+ * Vertical scrollbar remains for long property lists.
+ */
+.dopesheet-scroll-area {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: oklch(40% 0 0deg / 40%) transparent;
+}
+
+.dopesheet-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 0;
+}
+
+.dopesheet-scroll-area::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Hide track section vertical scrollbars so they don't shrink content width,
    matching the .timeline-container horizontal scrollbar pattern */
 [data-track-section-scroll] {

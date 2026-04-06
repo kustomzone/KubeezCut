@@ -13,6 +13,7 @@ import { GroupGizmo } from './group-gizmo';
 import { SelectableItem } from './selectable-item';
 import { SnapGuides } from './snap-guides';
 import { screenToCanvas, transformToScreenBounds } from '../utils/coordinate-transform';
+import { getContainedViewportInLayerSpace } from '../utils/contained-media-gizmo';
 import { useMarqueeSelection, isMarqueeJustFinished, type Rect } from '@/hooks/use-marquee-selection';
 import { MarqueeOverlay } from '@/components/marquee-overlay';
 import { useVisualTransforms } from '../hooks/use-visual-transform';
@@ -547,7 +548,14 @@ export function GizmoOverlay({
       const startTransformSnapshot = { ...transform };
       const point = screenToCanvas(e.clientX, e.clientY, coordParams);
 
-      startTranslate(itemId, point, transform);
+      const item = visualItems.find((i) => i.id === itemId);
+      const preview = useGizmoStore.getState().preview?.[itemId];
+      const crop = preview?.properties?.crop ?? (item && 'crop' in item ? item.crop : undefined);
+      const mediaViewport = item
+        ? getContainedViewportInLayerSpace(item, transform.width, transform.height, crop)
+        : undefined;
+
+      startTranslate(itemId, point, transform, undefined, mediaViewport ?? undefined);
       document.body.style.cursor = 'move';
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -572,7 +580,7 @@ export function GizmoOverlay({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [coordParams, startTranslate, updateInteraction, endInteraction, clearInteraction, handleTransformEnd, transformChanged]
+    [coordParams, startTranslate, updateInteraction, endInteraction, clearInteraction, handleTransformEnd, transformChanged, visualItems]
   );
 
   // Don't render if no coordinate params (container not measured yet)

@@ -65,22 +65,55 @@ function getScaleSnapPoints(canvasWidth: number, canvasHeight: number) {
  * Transform x/y is offset from canvas center.
  * @param strokeExpansion - Optional stroke width to expand bounds (for shapes with strokes)
  */
+const SNAP_ROT_EPS = 0.02;
+
 function getItemBounds(
   transform: Transform,
   canvasWidth: number,
   canvasHeight: number,
-  strokeExpansion: number = 0
-) {
+  strokeExpansion: number = 0,
+  mediaViewportInLayer?: { x: number; y: number; width: number; height: number } | null,
+): {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  centerX: number;
+  centerY: number;
+} {
   const centerX = canvasWidth / 2 + transform.x;
   const centerY = canvasHeight / 2 + transform.y;
   // Expand bounds by half stroke on each side
   const expand = strokeExpansion / 2;
 
+  const Lw = transform.width;
+  const Lh = transform.height;
+  const vp = mediaViewportInLayer;
+  if (
+    vp
+    && vp.width > 0
+    && vp.height > 0
+    && Math.abs(transform.rotation) < SNAP_ROT_EPS
+  ) {
+    const dx = vp.x + vp.width / 2 - Lw / 2;
+    const dy = vp.y + vp.height / 2 - Lh / 2;
+    const visCenterX = centerX + dx;
+    const visCenterY = centerY + dy;
+    return {
+      left: visCenterX - vp.width / 2 - expand,
+      right: visCenterX + vp.width / 2 + expand,
+      top: visCenterY - vp.height / 2 - expand,
+      bottom: visCenterY + vp.height / 2 + expand,
+      centerX: visCenterX,
+      centerY: visCenterY,
+    };
+  }
+
   return {
-    left: centerX - transform.width / 2 - expand,
-    right: centerX + transform.width / 2 + expand,
-    top: centerY - transform.height / 2 - expand,
-    bottom: centerY + transform.height / 2 + expand,
+    left: centerX - Lw / 2 - expand,
+    right: centerX + Lw / 2 + expand,
+    top: centerY - Lh / 2 - expand,
+    bottom: centerY + Lh / 2 + expand,
     centerX,
     centerY,
   };
@@ -97,10 +130,11 @@ export function applySnapping(
   canvasWidth: number,
   canvasHeight: number,
   currentSnapLines: SnapLine[] = [],
-  strokeExpansion: number = 0
+  strokeExpansion: number = 0,
+  mediaViewportInLayer?: { x: number; y: number; width: number; height: number } | null,
 ): SnapResult {
   const snapPoints = getTranslateSnapPoints(canvasWidth, canvasHeight);
-  const bounds = getItemBounds(transform, canvasWidth, canvasHeight, strokeExpansion);
+  const bounds = getItemBounds(transform, canvasWidth, canvasHeight, strokeExpansion, mediaViewportInLayer);
   const snapLines: SnapLine[] = [];
 
   // Check if currently snapped to vertical/horizontal lines

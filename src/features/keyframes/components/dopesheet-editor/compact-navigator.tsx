@@ -164,7 +164,7 @@ export function CompactNavigator({
   ]);
 
   return (
-    <div className="h-5 border-t border-border bg-background/80 px-2 py-1">
+    <div className="h-5 border-t border-border/25 bg-muted/10 px-2 py-1">
       <div
         ref={trackRef}
         className={cn(

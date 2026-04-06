@@ -1,6 +1,6 @@
 {
   "name": "kubeezcut",
-  "description": "KubeezCut — browser-based multi-track video editor (WebGPU, WebCodecs, local-first).",
+  "description": "KubeezCut — free, open-source browser video editor (WebGPU, WebCodecs, local-first). Companion app to the Kubeez.com AI media platform.",
   "private": true,
   "version": "0.0.0",
   "type": "module",

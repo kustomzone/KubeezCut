@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-interface TimelineViewportState {
+export interface TimelineViewportState {
   scrollLeft: number;
   scrollTop: number;
   viewportWidth: number;
@@ -8,8 +8,12 @@ interface TimelineViewportState {
   pendingScrollToFrame: number | null;
 }
 
+/** Scroll/size update; `pendingScrollToFrame` is preserved when omitted (merge with current). */
+export type TimelineViewportUpdate = Omit<TimelineViewportState, 'pendingScrollToFrame'> &
+  Partial<Pick<TimelineViewportState, 'pendingScrollToFrame'>>;
+
 interface TimelineViewportActions {
-  setViewport: (next: TimelineViewportState) => void;
+  setViewport: (next: TimelineViewportUpdate) => void;
   /** Request the timeline container to scroll so `frame` is visible. */
   requestScrollToFrame: (frame: number) => void;
   clearScrollToFrame: () => void;
@@ -60,8 +64,16 @@ export const useTimelineViewportStore = create<TimelineViewportState & TimelineV
     pendingScrollToFrame: null,
     requestScrollToFrame: (frame: number) => set({ pendingScrollToFrame: frame }),
     clearScrollToFrame: () => set({ pendingScrollToFrame: null }),
-    setViewport: (next) => {
+    setViewport: (partial) => {
       const current = get();
+      const next: TimelineViewportState = {
+        ...current,
+        ...partial,
+        pendingScrollToFrame:
+          partial.pendingScrollToFrame !== undefined
+            ? partial.pendingScrollToFrame
+            : current.pendingScrollToFrame,
+      };
       if (!hasMeaningfulChange(current, next)) {
         return;
       }

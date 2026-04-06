@@ -528,7 +528,8 @@ fn flutedGlassFragment(input: VertexOutput) -> @location(0) vec4f {
   edgeDistortion *= mask;
   let frame = getUvFrame(uv, edgeDistortion);
 
-  var stretch = 1.0 - smoothstep(0.0, 0.5, xNonSmooth) * smoothstep(1.0, 0.5, xNonSmooth);
+  // WGSL requires smoothstep(low, high, x) with low < high; GLSL-style (1, 0.5, x) is 1 - smoothstep(0.5, 1, x).
+  var stretch = 1.0 - smoothstep(0.0, 0.5, xNonSmooth) * (1.0 - smoothstep(0.5, 1.0, xNonSmooth));
   stretch = pow(stretch, 2.0);
   stretch *= mask;
   stretch *= getUvFrame(uv, 0.1 + 0.05 * mask * frameFade);

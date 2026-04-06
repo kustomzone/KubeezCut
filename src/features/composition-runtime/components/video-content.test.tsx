@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { VideoContent } from './video-content';
@@ -169,6 +168,7 @@ describe('VideoContent pooled handoff', () => {
           trackId: 'track-1',
           from: 0,
           durationInFrames: 90,
+          label: '',
           src: 'blob:test',
           _poolClipId: 'group-origin-1',
         }}
@@ -192,6 +192,7 @@ describe('VideoContent pooled handoff', () => {
           trackId: 'track-1',
           from: 30,
           durationInFrames: 60,
+          label: '',
           src: 'blob:test',
           _poolClipId: 'group-origin-1',
         }}

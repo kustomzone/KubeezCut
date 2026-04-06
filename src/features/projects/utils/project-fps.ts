@@ -64,7 +64,8 @@ export function resolveAutoMatchProjectFps(sourceFps: number): {
     return { fps: 30, exact: false };
   }
 
-  let closest = AUTO_MATCH_PROJECT_FPS_VALUES[0];
+  const firstCandidate = AUTO_MATCH_PROJECT_FPS_VALUES[0] ?? 30;
+  let closest = firstCandidate;
   let smallestDelta = Math.abs(sourceFps - closest);
 
   for (const candidate of AUTO_MATCH_PROJECT_FPS_VALUES.slice(1)) {

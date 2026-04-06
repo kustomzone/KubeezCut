@@ -5,6 +5,7 @@ import {
   audioExtensionFromMime,
   generateKubeezDialogueBlob,
   generateKubeezMusicFiles,
+  KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID,
 } from '@/infrastructure/kubeez/kubeez-audio-generations';
 import { extensionFromMime, generateKubeezMediaBlob } from '@/infrastructure/kubeez/kubeez-text-to-image';
 import { uploadKubeezMediaFile } from '@/infrastructure/kubeez/kubeez-upload-media';
@@ -138,7 +139,7 @@ export async function runKubeezGenerateJobInBackground(
       const blob = await generateKubeezDialogueBlob({
         apiKey,
         baseUrl,
-        dialogue: [{ text: prompt, voice: snapshot.speechVoice ?? 'Adam' }],
+        dialogue: [{ text: prompt, voice: snapshot.speechVoice ?? KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID }],
         stability,
         language_code: snapshot.speechLanguage ?? 'auto',
       });
@@ -150,7 +151,7 @@ export async function runKubeezGenerateJobInBackground(
 
       const ext = audioExtensionFromMime(blob.type || 'audio/mpeg');
       const mime = blob.type || 'audio/mpeg';
-      const voice = snapshot.speechVoice ?? 'Adam';
+      const voice = snapshot.speechVoice ?? KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID;
       const file = new File([blob], `kubeez-speech-${Date.now()}.${ext}`, { type: mime });
       const media = await mediaLibraryService.importGeneratedMedia(file, projectId, {
         tags: ['kubeez', 'tts', voice],

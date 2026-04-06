@@ -1,11 +1,11 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { createLogger } from '@/shared/logging/logger';
 
 const logger = createLogger('ProjectsIndex');
 import { Button } from '@/components/ui/button';
-import { Plus, Upload, FolderOpen, File } from 'lucide-react';
+import { Plus, Upload, FolderOpen, File, Copy, Check } from 'lucide-react';
 import { KubeezCutLogo } from '@/components/brand/kubeez-cut-logo';
 import { ProjectList } from '@/features/projects/components/project-list';
 import { ProjectForm } from '@/features/projects/components/project-form';
@@ -30,6 +30,26 @@ import {
   isBundleFileName,
   stripBundleStemFromFileStem,
 } from '@/features/project-bundle/types/bundle';
+import { getFilePickerUnavailableHelp } from '@/shared/utils/browser-file-system-access';
+
+function ImportFlagCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(() => {
+    void navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [text]);
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-muted transition-colors shrink-0"
+      title="Copy to clipboard"
+    >
+      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+    </button>
+  );
+}
 
 export const Route = createFileRoute('/projects/')({
   component: ProjectsIndex,
@@ -57,6 +77,7 @@ function ProjectsIndex() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importErrorLink, setImportErrorLink] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
 
   const PROJECTS_FOLDER_NAME = 'KubeezCutProjects';
@@ -95,6 +116,7 @@ function ProjectsIndex() {
     // Validate file extension (handles browser-renamed files like "project.kubeez (1).zip")
     if (!isValidBundleFile(file.name)) {
       setImportError(`Please select a valid ${BUNDLE_EXTENSION} file`);
+      setImportErrorLink(null);
       setImportDialogOpen(true);
       return;
     }
@@ -105,6 +127,7 @@ function ProjectsIndex() {
     setDestinationDir(null);
     setDestinationName(null);
     setImportError(null);
+    setImportErrorLink(null);
     setImportProgress(null);
     setIsImporting(false);
     setImportDialogOpen(true);
@@ -112,6 +135,13 @@ function ProjectsIndex() {
 
   // Step 2: User clicks to select destination folder (fresh user gesture!)
   const handleSelectDestination = async () => {
+    const fsHelp = getFilePickerUnavailableHelp('directory');
+    if (fsHelp) {
+      setImportError(fsHelp.message);
+      setImportErrorLink(fsHelp.flagUrl);
+      return;
+    }
+
     try {
       const dirHandle = await window.showDirectoryPicker({
         id: 'kubeezcut-import',
@@ -121,6 +151,7 @@ function ProjectsIndex() {
       setDestinationDir(dirHandle);
       setDestinationName(dirHandle.name);
       setImportError(null);
+      setImportErrorLink(null);
     } catch (err) {
       // User cancelled - ignore
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -131,10 +162,12 @@ function ProjectsIndex() {
         setImportError(
           'Cannot select system folders directly. Use "New Folder" in the picker to create a folder first, then select it.'
         );
+        setImportErrorLink(null);
         return;
       }
       logger.error('Failed to select directory:', err);
       setImportError('Failed to select destination folder. Please try a different location.');
+      setImportErrorLink(null);
     }
   };
 
@@ -179,6 +212,7 @@ function ProjectsIndex() {
     } catch (err) {
       logger.error('Import failed:', err);
       setImportError(err instanceof Error ? err.message : 'Import failed');
+      setImportErrorLink(null);
       setImportProgress(null);
       setIsImporting(false);
     }
@@ -193,6 +227,7 @@ function ProjectsIndex() {
     setDestinationDir(null);
     setDestinationName(null);
     setImportError(null);
+    setImportErrorLink(null);
     setImportProgress(null);
     setIsImporting(false);
   };
@@ -343,7 +378,17 @@ function ProjectsIndex() {
           {importError && !pendingImportFile ? (
             /* Fatal error state - no file */
             <div className="space-y-4">
-              <p className="text-sm text-destructive">{importError}</p>
+              <div>
+                <p className="text-sm text-destructive">{importError}</p>
+                {importErrorLink && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-foreground select-text break-all">
+                      {importErrorLink}
+                    </code>
+                    <ImportFlagCopyButton text={importErrorLink} />
+                  </div>
+                )}
+              </div>
               <Button
                 variant="outline"
                 className="w-full"
@@ -407,7 +452,17 @@ function ProjectsIndex() {
                 </label>
 
                 {importError && (
-                  <p className="text-xs text-destructive">{importError}</p>
+                  <div>
+                    <p className="text-xs text-destructive">{importError}</p>
+                    {importErrorLink && (
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <code className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-foreground select-text break-all">
+                          {importErrorLink}
+                        </code>
+                        <ImportFlagCopyButton text={importErrorLink} />
+                      </div>
+                    )}
+                  </div>
                 )}
                 {destinationDir && !importError && (
                   <div className="p-3 bg-muted/50 rounded-lg border border-border">

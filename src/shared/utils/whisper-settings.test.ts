@@ -42,7 +42,7 @@ describe('whisper-settings', () => {
       value: 'hybrid',
       label: 'Hybrid (Recommended)',
     });
-    expect(getWhisperQuantizationOption('q4').description).toContain('low-memory');
-    expect(getWhisperQuantizationOption(undefined).value).toBe('hybrid');
+    expect(getWhisperQuantizationOption('q4')?.description ?? '').toContain('low-memory');
+    expect(getWhisperQuantizationOption(undefined)?.value).toBe('hybrid');
   });
 });

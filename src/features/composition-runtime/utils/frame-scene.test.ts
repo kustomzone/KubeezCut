@@ -154,6 +154,8 @@ describe('frame scene', () => {
       transitions: [
         {
           id: 'transition-1',
+          type: 'crossfade',
+          trackId: 'track-1',
           leftClipId: 'left',
           rightClipId: 'right',
           durationInFrames: 10,

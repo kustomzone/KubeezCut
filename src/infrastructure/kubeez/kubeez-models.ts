@@ -5,11 +5,28 @@ import {
   writeKubeezGroupedModelsCache,
 } from './kubeez-models-cache';
 import { documentedMaxReferenceFilesForModelId } from './kubeez-documented-reference-limits';
+import { applyModelRequirementFallbacks } from './kubeez-model-requirements-fallback';
+import { applyVideoCapabilityOverrides } from './kubeez-video-model-capability-overrides';
 import { resolveKubeezApiBaseUrl } from './kubeez-text-to-image';
 
 const logger = createLogger('KubeezModels');
 
 export type KubeezMediaModelKind = 'image' | 'video' | 'music' | 'speech';
+
+/**
+ * Models returned by Kubeez `GET /v1/models` that KubeezCut does not surface (e.g. KubeezWebsite-only flows).
+ * Dropped during normalization and again in `finalizeModels` so cached snapshots cannot resurrect them.
+ */
+const KUBEEZ_CUT_EXCLUDED_CATALOG_MODEL_IDS = new Set<string>(['ad-copy']);
+
+function isExcludedFromKubeezCutCatalog(modelId: string): boolean {
+  return KUBEEZ_CUT_EXCLUDED_CATALOG_MODEL_IDS.has(modelId);
+}
+
+/** Drop KubeezWebsite-only / unsupported rows so they never appear in pickers or caches. */
+export function filterKubeezCutCatalogModels(models: KubeezMediaModelOption[]): KubeezMediaModelOption[] {
+  return models.filter((m) => !isExcludedFromKubeezCutCatalog(m.model_id));
+}
 
 export interface KubeezMediaModelOption {
   model_id: string;
@@ -17,6 +34,11 @@ export interface KubeezMediaModelOption {
   provider?: string;
   cost_per_generation?: number;
   prompt_max_chars?: number;
+  /**
+   * Optional hero image for model picker cards when returned by the Kubeez models API
+   * (`card_image_url`, `thumbnail_url`, etc.).
+   */
+  cardImageUrl?: string;
   mediaKind: KubeezMediaModelKind;
   /**
    * When false, aspect ratio is hidden and omitted from the generate request.
@@ -49,22 +71,28 @@ export const KUBEEZ_SPEECH_DIALOGUE_MODEL: KubeezMediaModelOption = {
   showAspectRatio: false,
 };
 
-export const FALLBACK_MUSIC_MODELS: KubeezMediaModelOption[] = [
-  { model_id: 'V5', display_name: 'V5', provider: 'Suno', mediaKind: 'music', showAspectRatio: false },
-  { model_id: 'V4_5PLUS', display_name: 'V4.5+', provider: 'Suno', mediaKind: 'music', showAspectRatio: false },
-  { model_id: 'V4_5', display_name: 'V4.5', provider: 'Suno', mediaKind: 'music', showAspectRatio: false },
-  { model_id: 'V4', display_name: 'V4', provider: 'Suno', mediaKind: 'music', showAspectRatio: false },
+const FALLBACK_MUSIC_MODELS_RAW: KubeezMediaModelOption[] = [
+  { model_id: 'V5_5', display_name: 'V5.5', provider: 'Kubeez', mediaKind: 'music', showAspectRatio: false },
+  { model_id: 'V5', display_name: 'V5', provider: 'Kubeez', mediaKind: 'music', showAspectRatio: false },
+  { model_id: 'V4_5PLUS', display_name: 'V4.5+', provider: 'Kubeez', mediaKind: 'music', showAspectRatio: false },
+  { model_id: 'V4_5', display_name: 'V4.5', provider: 'Kubeez', mediaKind: 'music', showAspectRatio: false },
+  { model_id: 'V4', display_name: 'V4', provider: 'Kubeez', mediaKind: 'music', showAspectRatio: false },
 ];
+
+export const FALLBACK_MUSIC_MODELS: KubeezMediaModelOption[] =
+  FALLBACK_MUSIC_MODELS_RAW.map((m) => applyModelRequirementFallbacks(m));
 
 /** @deprecated Use KubeezMediaModelOption */
 export type KubeezTextToImageModelOption = KubeezMediaModelOption;
 
 function withImageKind(models: Omit<KubeezMediaModelOption, 'mediaKind'>[]): KubeezMediaModelOption[] {
-  return models.map((m) => ({
-    ...m,
-    mediaKind: 'image' as const,
-    showAspectRatio: m.showAspectRatio ?? true,
-  }));
+  return models.map((m) =>
+    applyModelRequirementFallbacks({
+      ...m,
+      mediaKind: 'image' as const,
+      showAspectRatio: m.showAspectRatio ?? true,
+    })
+  );
 }
 
 /** Shown if the image models API fails (offline, bad key, etc.) */
@@ -104,6 +132,27 @@ interface ApiModelRow {
   requires_input_media?: boolean;
   generation_types?: string[];
   capabilities?: ApiCapabilities;
+  card_image_url?: string;
+  thumbnail_url?: string;
+  preview_image_url?: string;
+  hero_image_url?: string;
+}
+
+function parseOptionalCardImageUrl(m: ApiModelRow): string | undefined {
+  const directKeys = ['card_image_url', 'thumbnail_url', 'preview_image_url', 'hero_image_url'] as const;
+  for (const k of directKeys) {
+    const v = m[k];
+    if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+  }
+  const cap = m.capabilities;
+  if (cap && typeof cap === 'object') {
+    const c = cap as Record<string, unknown>;
+    for (const k of ['card_image_url', 'thumbnail_url', 'preview_image_url', 'hero_image_url'] as const) {
+      const v = c[k];
+      if (typeof v === 'string' && v.trim().length > 0) return v.trim();
+    }
+  }
+  return undefined;
 }
 
 function parseStringArray(v: unknown): string[] | undefined {
@@ -167,6 +216,7 @@ function normalizeImageModel(m: ApiModelRow): KubeezMediaModelOption | null {
   const id = typeof m.model_id === 'string' ? m.model_id.trim() : '';
   const name = typeof m.display_name === 'string' ? m.display_name.trim() : '';
   if (!id) return null;
+  if (isExcludedFromKubeezCutCatalog(id)) return null;
   const cap = m.capabilities;
   const pm =
     cap && typeof cap.prompt_max_chars === 'number' ? cap.prompt_max_chars : undefined;
@@ -183,6 +233,7 @@ function normalizeImageModel(m: ApiModelRow): KubeezMediaModelOption | null {
     showAspectRatio,
     aspectRatioOptions,
     maxReferenceFiles,
+    cardImageUrl: parseOptionalCardImageUrl(m),
   };
 }
 
@@ -190,6 +241,7 @@ function normalizeVideoModel(m: ApiModelRow, hasT2V: boolean, hasI2V: boolean): 
   const id = typeof m.model_id === 'string' ? m.model_id.trim() : '';
   const name = typeof m.display_name === 'string' ? m.display_name.trim() : '';
   if (!id) return null;
+  if (isExcludedFromKubeezCutCatalog(id)) return null;
 
   const requiresInput = m.requires_input_media === true;
   const canT2V = hasT2V && !requiresInput;
@@ -216,6 +268,7 @@ function normalizeVideoModel(m: ApiModelRow, hasT2V: boolean, hasI2V: boolean): 
     supportsTextToVideo: canT2V,
     supportsImageToVideo: canI2V,
     maxReferenceFiles,
+    cardImageUrl: parseOptionalCardImageUrl(m),
   };
 }
 
@@ -225,9 +278,28 @@ function sortByDisplayName(models: KubeezMediaModelOption[]): KubeezMediaModelOp
   );
 }
 
+function finalizeModels(models: KubeezMediaModelOption[]): KubeezMediaModelOption[] {
+  return filterKubeezCutCatalogModels(models).map((m) =>
+    applyModelRequirementFallbacks(applyVideoCapabilityOverrides(m))
+  );
+}
+
+/** Ensure every music engine id the UI can pick exists in the catalog (live API lists may omit some). */
+function mergeMusicCatalogWithEngineStubs(models: KubeezMediaModelOption[]): KubeezMediaModelOption[] {
+  const have = new Set(models.map((m) => m.model_id));
+  const merged = [...models];
+  for (const stub of FALLBACK_MUSIC_MODELS) {
+    if (!have.has(stub.model_id)) {
+      merged.push(stub);
+      have.add(stub.model_id);
+    }
+  }
+  return sortByDisplayName(merged);
+}
+
 function parseModelsFromResponse(
   body: unknown,
-  mediaKind: KubeezMediaModelKind,
+  _mediaKind: KubeezMediaModelKind,
   generationType: 'text-to-image' | 'text-to-video'
 ): KubeezMediaModelOption[] {
   const rawModels =
@@ -276,6 +348,7 @@ function normalizeMusicModel(m: ApiModelRow): KubeezMediaModelOption | null {
   const id = typeof m.model_id === 'string' ? m.model_id.trim() : '';
   const name = typeof m.display_name === 'string' ? m.display_name.trim() : '';
   if (!id) return null;
+  if (isExcludedFromKubeezCutCatalog(id)) return null;
   const cap = m.capabilities;
   const pm =
     cap && typeof cap.prompt_max_chars === 'number' ? cap.prompt_max_chars : undefined;
@@ -302,6 +375,7 @@ function normalizeMusicModel(m: ApiModelRow): KubeezMediaModelOption | null {
     mediaKind: 'music',
     showAspectRatio: false,
     maxReferenceFiles,
+    cardImageUrl: parseOptionalCardImageUrl(m),
   };
 }
 
@@ -372,7 +446,15 @@ export async function fetchKubeezGroupedMediaModels(params: {
 }): Promise<KubeezGroupedMediaModelsResult> {
   const { apiKey, baseUrl, signal } = params;
 
-  const cache = readKubeezGroupedModelsCache();
+  const cacheRaw = readKubeezGroupedModelsCache();
+  const cache = cacheRaw
+    ? {
+        ...cacheRaw,
+        imageModels: filterKubeezCutCatalogModels(cacheRaw.imageModels),
+        videoModels: filterKubeezCutCatalogModels(cacheRaw.videoModels),
+        musicModels: filterKubeezCutCatalogModels(cacheRaw.musicModels),
+      }
+    : null;
 
   const [imageSettled, videoSettled, musicSettled] = await Promise.allSettled([
     fetchModelsForType({ apiKey, baseUrl, signal, modelType: 'image' }).then((body) =>
@@ -426,15 +508,15 @@ export async function fetchKubeezGroupedMediaModels(params: {
   let catalogAugmentedFromCache = false;
 
   const imgMerge = mergeWithCacheAugment(imageModels, cache?.imageModels);
-  imageModels = imgMerge.list;
+  imageModels = finalizeModels(imgMerge.list);
   catalogAugmentedFromCache ||= imgMerge.addedFromCache;
 
   const vidMerge = mergeWithCacheAugment(videoModels, cache?.videoModels);
-  videoModels = vidMerge.list;
+  videoModels = finalizeModels(vidMerge.list);
   catalogAugmentedFromCache ||= vidMerge.addedFromCache;
 
   const musMerge = mergeWithCacheAugment(musicModels, cache?.musicModels);
-  musicModels = musMerge.list;
+  musicModels = mergeMusicCatalogWithEngineStubs(finalizeModels(musMerge.list));
   catalogAugmentedFromCache ||= musMerge.addedFromCache;
 
   let videoSource: KubeezModelVideoSource;
@@ -470,5 +552,5 @@ export async function fetchKubeezTextToImageModels(params: {
   signal?: AbortSignal;
 }): Promise<KubeezMediaModelOption[]> {
   const body = await fetchModelsForType({ ...params, modelType: 'image' });
-  return parseModelsFromResponse(body, 'image', 'text-to-image');
+  return finalizeModels(parseModelsFromResponse(body, 'image', 'text-to-image'));
 }

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, memo, useCallback, useState } from 'react';
+import { useRef, useEffect, useMemo, memo, useCallback, useState, type CSSProperties } from 'react';
 import type { TimelineItem as TimelineItemType } from '@/types/timeline';
 import { useShallow } from 'zustand/react/shallow';
 import { setMixerLiveGains, getMixerLiveGain, clearMixerLiveGain } from '@/shared/state/mixer-live-gain';
@@ -3167,7 +3167,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
                 ? getAudioVisualizationScale(audioVolumePreviewRef.current)
                 : audioVisualizationScale
             ),
-          }}
+          } as CSSProperties}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onMouseDown={handleMouseDown}

@@ -142,9 +142,14 @@ describe('canvas mask animation', () => {
       ...track,
       items: [
         {
-          ...track.items[0],
           id: 'mask-path',
+          type: 'shape' as const,
+          trackId: 'track-1',
+          from: 0,
+          durationInFrames: 30,
+          label: 'Mask',
           shapeType: 'path' as const,
+          fillColor: '#fff',
           pathVertices: [
             {
               position: [0.25, 0.25] as [number, number],
@@ -152,6 +157,8 @@ describe('canvas mask animation', () => {
               outHandle: [0.25, 0.25] as [number, number],
             },
           ],
+          isMask: true,
+          maskType: 'clip' as const,
         },
       ],
     };

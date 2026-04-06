@@ -216,7 +216,7 @@ export type KubeezGpt15ImageQuality = 'medium' | 'high';
 
 export type KubeezKling25Clip = '5s' | '10s';
 
-export type KubeezVeo31Tier = 'fast' | 'quality';
+export type KubeezVeo31Tier = 'fast' | 'lite' | 'quality';
 export type KubeezVeo31Mode = 'text-to-video' | 'first-and-last-frames' | 'reference-to-video';
 
 export type KubeezVeo31Settings = {
@@ -236,11 +236,16 @@ export type KubeezWan25Settings = {
   resolution: KubeezWan25Resolution;
 };
 
-export type KubeezSunoEngine = 'V4' | 'V4_5' | 'V4_5PLUS' | 'V5' | 'V5_5';
+export type KubeezMusicEngine = 'V4' | 'V4_5' | 'V4_5PLUS' | 'V5' | 'V5_5';
 
-export type KubeezSunoToolKind = 'instrumental' | 'vocals' | 'lyrics';
+export type KubeezMusicToolKind = 'instrumental' | 'vocals' | 'lyrics';
 
 export type KubeezModelSettings = {
+  /**
+   * Video aspect for POST `aspect_ratio` when not encoded in `model_id`.
+   * The generate dialog currently keeps this in local React state; reserved for future persistence.
+   */
+  videoAspectRatio?: string;
   imageResolution?: KubeezImageResolutionTier;
   imagenTier?: KubeezImagenTier;
   videoAxes?: KubeezVideoAxisSettings;
@@ -254,8 +259,8 @@ export type KubeezModelSettings = {
   kling25Clip?: KubeezKling25Clip;
   veo31?: KubeezVeo31Settings;
   wan25?: KubeezWan25Settings;
-  sunoEngine?: KubeezSunoEngine;
-  sunoTool?: KubeezSunoToolKind;
+  sunoEngine?: KubeezMusicEngine;
+  sunoTool?: KubeezMusicToolKind;
 };
 
 const KLING26_VARIANT_RE =
@@ -514,11 +519,13 @@ const VEO31_ID_TO_SETTINGS: Record<string, KubeezVeo31Settings> = {
   'veo3-1-fast-text-to-video': { tier: 'fast', mode: 'text-to-video' },
   'veo3-1-fast-reference-to-video': { tier: 'fast', mode: 'reference-to-video' },
   'veo3-1-fast-first-and-last-frames': { tier: 'fast', mode: 'first-and-last-frames' },
+  'veo3-1-lite-text-to-video': { tier: 'lite', mode: 'text-to-video' },
+  'veo3-1-lite-first-and-last-frames': { tier: 'lite', mode: 'first-and-last-frames' },
   'veo3-1-text-to-video': { tier: 'quality', mode: 'text-to-video' },
   'veo3-1-first-and-last-frames': { tier: 'quality', mode: 'first-and-last-frames' },
 };
 
-const SUNO_TOOL_IDS: Record<KubeezSunoToolKind, string> = {
+const KUBEEZ_MUSIC_TOOL_MODEL_IDS: Record<KubeezMusicToolKind, string> = {
   instrumental: 'suno-add-instrumental',
   vocals: 'suno-add-vocals',
   lyrics: 'suno-lyrics-generation',
@@ -550,13 +557,17 @@ export function inferKling25ClipFromModelId(modelId: string): KubeezKling25Clip 
 
 export function mapVeo31ToModelId(s: KubeezVeo31Settings): string {
   let mode = s.mode;
-  if (s.tier === 'quality' && mode === 'reference-to-video') {
+  if ((s.tier === 'quality' || s.tier === 'lite') && mode === 'reference-to-video') {
     mode = 'text-to-video';
   }
   if (s.tier === 'fast') {
     if (mode === 'text-to-video') return 'veo3-1-fast-text-to-video';
     if (mode === 'reference-to-video') return 'veo3-1-fast-reference-to-video';
     return 'veo3-1-fast-first-and-last-frames';
+  }
+  if (s.tier === 'lite') {
+    if (mode === 'text-to-video') return 'veo3-1-lite-text-to-video';
+    return 'veo3-1-lite-first-and-last-frames';
   }
   if (mode === 'text-to-video') return 'veo3-1-text-to-video';
   return 'veo3-1-first-and-last-frames';
@@ -586,11 +597,11 @@ export function parseWan25Variant(modelId: string): KubeezWan25Settings | null {
   };
 }
 
-export function mapSunoEngineToModelId(engine: KubeezSunoEngine): string {
+export function mapMusicEngineToModelId(engine: KubeezMusicEngine): string {
   return engine;
 }
 
-export function inferSunoEngineFromModelId(modelId: string): KubeezSunoEngine {
+export function inferMusicEngineFromModelId(modelId: string): KubeezMusicEngine {
   if (
     modelId === 'V4' ||
     modelId === 'V4_5' ||
@@ -603,11 +614,11 @@ export function inferSunoEngineFromModelId(modelId: string): KubeezSunoEngine {
   return 'V5_5';
 }
 
-export function mapSunoToolToModelId(tool: KubeezSunoToolKind): string {
-  return SUNO_TOOL_IDS[tool];
+export function mapMusicToolToModelId(tool: KubeezMusicToolKind): string {
+  return KUBEEZ_MUSIC_TOOL_MODEL_IDS[tool];
 }
 
-export function inferSunoToolFromModelId(modelId: string): KubeezSunoToolKind {
+export function inferMusicToolFromModelId(modelId: string): KubeezMusicToolKind {
   if (modelId === 'suno-add-vocals') return 'vocals';
   if (modelId === 'suno-lyrics-generation') return 'lyrics';
   return 'instrumental';

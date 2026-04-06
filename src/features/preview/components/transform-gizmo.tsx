@@ -1,12 +1,14 @@
 import { useMemo, useCallback } from 'react';
 import type { TimelineItem } from '@/types/timeline';
+import type { ResolvedTransform } from '@/types/transform';
 import type { GizmoHandle, Transform, CoordinateParams } from '../types/gizmo';
 import { useGizmoStore } from '../stores/gizmo-store';
 import { useAnimatedTransform } from '@/features/preview/deps/keyframes';
 import { useEscapeCancel } from '../hooks/use-drag-interaction';
 import { GizmoHandles } from './gizmo-handles';
-import { transformToScreenBounds, screenToCanvas, getScaleCursor } from '../utils/coordinate-transform';
+import { transformToScreenBounds, screenToCanvas, getScaleCursor, getEffectiveScale } from '../utils/coordinate-transform';
 import { expandTextTransformForPreview } from '../utils/text-layout';
+import { getContainedViewportInLayerSpace } from '../utils/contained-media-gizmo';
 
 interface TransformGizmoProps {
   item: TimelineItem;
@@ -65,9 +67,13 @@ export function TransformGizmo({
     };
 
     if (item.type === 'text') {
+      const resolvedForText: ResolvedTransform = {
+        ...baseTransform,
+        cornerRadius: baseTransform.cornerRadius ?? 0,
+      };
       baseTransform = expandTextTransformForPreview(
         item,
-        baseTransform,
+        resolvedForText,
         itemPreview?.properties
       );
     }
@@ -80,6 +86,17 @@ export function TransformGizmo({
 
     return baseTransform;
   }, [animatedTransform, isInteracting, previewTransform, item, itemPreview]);
+
+  /** Letterboxed / cropped visible media rect inside the layer (matches composition preview). */
+  const mediaViewportInLayer = useMemo(() => {
+    const crop = itemPreview?.properties?.crop ?? ('crop' in item ? item.crop : undefined);
+    return getContainedViewportInLayerSpace(
+      item,
+      currentTransform.width,
+      currentTransform.height,
+      crop,
+    );
+  }, [item, itemPreview, currentTransform.width, currentTransform.height]);
 
   // Convert to screen bounds, expanding for stroke width on shapes
   const screenBounds = useMemo(() => {
@@ -106,6 +123,18 @@ export function TransformGizmo({
 
     return bounds;
   }, [currentTransform, coordParams, item, itemPreview]);
+
+  const layerScreenBounds = screenBounds;
+  const innerScreenOffset = useMemo(() => {
+    if (!mediaViewportInLayer) return null;
+    const z = getEffectiveScale(coordParams);
+    return {
+      left: mediaViewportInLayer.x * z,
+      top: mediaViewportInLayer.y * z,
+      width: mediaViewportInLayer.width * z,
+      height: mediaViewportInLayer.height * z,
+    };
+  }, [mediaViewportInLayer, coordParams]);
 
   // Helper to convert screen position to canvas position
   const toCanvasPoint = useCallback(
@@ -137,7 +166,7 @@ export function TransformGizmo({
       e.preventDefault();
       const point = toCanvasPoint(e);
       const startTransformSnapshot = { ...currentTransform };
-      startTranslate(item.id, point, currentTransform, strokeWidth);
+      startTranslate(item.id, point, currentTransform, strokeWidth, mediaViewportInLayer ?? undefined);
       onTransformStart();
       document.body.style.cursor = 'move';
 
@@ -169,7 +198,7 @@ export function TransformGizmo({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [item.id, currentTransform, toCanvasPoint, startTranslate, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged, strokeWidth]
+    [item.id, currentTransform, toCanvasPoint, startTranslate, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged, strokeWidth, mediaViewportInLayer]
   );
 
   const handleScaleStart = useCallback(
@@ -178,7 +207,7 @@ export function TransformGizmo({
       e.preventDefault();
       const point = toCanvasPoint(e);
       const startTransformSnapshot = { ...currentTransform };
-      startScale(item.id, handle, point, currentTransform, item.type, item.transform?.aspectRatioLocked, strokeWidth);
+      startScale(item.id, handle, point, currentTransform, item.type, item.transform?.aspectRatioLocked, strokeWidth, mediaViewportInLayer ?? undefined);
       onTransformStart();
       document.body.style.cursor = getScaleCursor(handle, currentTransform.rotation);
 
@@ -208,7 +237,7 @@ export function TransformGizmo({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [item.id, currentTransform, toCanvasPoint, startScale, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged, strokeWidth]
+    [item.id, currentTransform, toCanvasPoint, startScale, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged, strokeWidth, mediaViewportInLayer]
   );
 
   const handleRotateStart = useCallback(
@@ -247,7 +276,7 @@ export function TransformGizmo({
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     },
-    [item.id, currentTransform, toCanvasPoint, startRotate, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged, strokeWidth]
+    [item.id, currentTransform, toCanvasPoint, startRotate, updateInteraction, endInteraction, clearInteraction, onTransformStart, onTransformEnd, transformChanged, strokeWidth, mediaViewportInLayer]
   );
 
   // Handle escape key to cancel interaction
@@ -259,35 +288,52 @@ export function TransformGizmo({
     }, [cancelInteraction])
   );
 
+  const handleBounds = {
+    left: layerScreenBounds.left,
+    top: layerScreenBounds.top,
+    width: innerScreenOffset?.width ?? layerScreenBounds.width,
+    height: innerScreenOffset?.height ?? layerScreenBounds.height,
+  };
+
   return (
     <div
       className="absolute transition-opacity duration-150"
       style={{
-        left: screenBounds.left,
-        top: screenBounds.top,
-        width: screenBounds.width,
-        height: screenBounds.height,
+        left: layerScreenBounds.left,
+        top: layerScreenBounds.top,
+        width: layerScreenBounds.width,
+        height: layerScreenBounds.height,
         transform: `rotate(${currentTransform.rotation}deg)`,
         transformOrigin: 'center center',
         opacity: isPlaying ? 0 : 1,
-        // High z-index to ensure gizmo is always above SelectableItems
         zIndex: 100,
-        // Container captures events to block SelectableItems below
-        pointerEvents: 'auto',
+        pointerEvents: 'none',
       }}
-      // Prevent events from propagating to elements below
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      <GizmoHandles
-        bounds={screenBounds}
-        rotation={currentTransform.rotation}
-        isInteracting={isInteracting}
-        isMask={item.type === 'shape' && item.isMask}
-        onTranslateStart={handleTranslateStart}
-        onScaleStart={handleScaleStart}
-        onRotateStart={handleRotateStart}
-      />
+      <div
+        className="absolute"
+        style={{
+          left: innerScreenOffset?.left ?? 0,
+          top: innerScreenOffset?.top ?? 0,
+          width: innerScreenOffset?.width ?? layerScreenBounds.width,
+          height: innerScreenOffset?.height ?? layerScreenBounds.height,
+          pointerEvents: 'auto',
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        <GizmoHandles
+          bounds={handleBounds}
+          rotation={currentTransform.rotation}
+          isInteracting={isInteracting}
+          isMask={item.type === 'shape' && item.isMask}
+          onTranslateStart={handleTranslateStart}
+          onScaleStart={handleScaleStart}
+          onRotateStart={handleRotateStart}
+        />
+      </div>
     </div>
   );
 }

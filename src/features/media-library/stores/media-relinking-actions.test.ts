@@ -122,7 +122,7 @@ describe('createRelinkingActions', () => {
 
       expect(set).toHaveBeenCalled();
       expect(currentState.brokenMediaIds).toContain('media-1');
-      expect(currentState.brokenMediaInfo.has('media-1')).toBe(true);
+      expect(currentState.brokenMediaInfo?.has('media-1')).toBe(true);
     });
 
     it('is idempotent â€” does not duplicate entries', () => {
@@ -167,7 +167,7 @@ describe('createRelinkingActions', () => {
       actions.markMediaHealthy('media-1');
 
       expect(currentState.brokenMediaIds).toEqual(['media-2']);
-      expect(currentState.brokenMediaInfo.has('media-1')).toBe(false);
+      expect(currentState.brokenMediaInfo?.has('media-1')).toBe(false);
     });
   });
 

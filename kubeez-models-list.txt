@@ -1,10 +1,9 @@
 ﻿# Kubeez models — GET https://api.kubeez.com/v1/models
 # Generated: 2026-03-28 09:54:18 +02:00
 
-total_count: 112
+total_count: 111
 
 model_id	model_type	display_name	provider	cost_per_generation
-ad-copy	image	Ad Copy	Kubeez	50.0
 flux-2-1K	image	Flux 2 1K	Black Forest Labs	10.0
 flux-2-2K	image	Flux 2 2K	Black Forest Labs	13.0
 flux-2-edit-1K	image	Flux 2 Edit 1K	Black Forest Labs	10.0

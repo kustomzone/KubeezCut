@@ -288,7 +288,7 @@ export function KeyframeTimingStrip({
   }, [metrics.contentFrameMax, metrics.usableTrackWidth, onSlideChange, onSlideEnd, onSlideStart]);
 
   return (
-    <div className="h-4 border-t border-border/60 bg-background/90 px-2 py-0.5">
+    <div className="h-4 border-t border-border/25 bg-muted/10 px-2 py-0.5">
       <div
         ref={trackRef}
         data-testid="keyframe-timing-strip-track"
@@ -298,13 +298,6 @@ export function KeyframeTimingStrip({
         )}
         onPointerDown={handleTrackPointerDown}
       >
-        <div
-          className="pointer-events-none absolute inset-y-[1px] rounded-sm bg-muted-foreground/10"
-          style={{
-            left: metrics.thumbLeft,
-            width: metrics.thumbWidth,
-          }}
-        />
         {marqueeRange ? (
           <div
             className="pointer-events-none absolute inset-y-0 rounded-sm bg-primary/20"

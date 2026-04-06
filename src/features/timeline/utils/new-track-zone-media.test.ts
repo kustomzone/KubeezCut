@@ -7,7 +7,7 @@ import {
 
 describe('planNewTrackZonePlacements', () => {
   it('creates fresh video and audio tracks for linked video media in the video zone', () => {
-    const tracks = createDefaultClassicTracks(80);
+    const tracks = createDefaultClassicTracks(72);
 
     const result = planNewTrackZonePlacements({
       entries: [{
@@ -41,7 +41,7 @@ describe('planNewTrackZonePlacements', () => {
   });
 
   it('also accepts linked video media in the audio zone and still creates both tracks', () => {
-    const tracks = createDefaultClassicTracks(80);
+    const tracks = createDefaultClassicTracks(72);
 
     const result = planNewTrackZonePlacements({
       entries: [{
@@ -69,7 +69,7 @@ describe('planNewTrackZonePlacements', () => {
   });
 
   it('creates a fresh audio track for audio-only media in the audio zone', () => {
-    const tracks = createDefaultClassicTracks(80);
+    const tracks = createDefaultClassicTracks(72);
 
     const result = planNewTrackZonePlacements({
       entries: [{
@@ -99,7 +99,7 @@ describe('planNewTrackZonePlacements', () => {
 
 describe('buildGhostPreviewsFromNewTrackZonePlan', () => {
   it('returns stacked video and audio ghosts for linked video media', () => {
-    const tracks = createDefaultClassicTracks(80);
+    const tracks = createDefaultClassicTracks(72);
     const { plannedItems } = planNewTrackZonePlacements({
       entries: [{
         payload: { id: 'media-1' },

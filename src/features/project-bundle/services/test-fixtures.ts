@@ -273,6 +273,8 @@ function createTransition(
   return {
     id: generateId('transition'),
     type: 'crossfade',
+    presentation: 'fade',
+    timing: 'linear',
     leftClipId,
     rightClipId,
     trackId,

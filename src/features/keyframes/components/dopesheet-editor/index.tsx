@@ -623,7 +623,7 @@ function MiniZoomControl({
   const thumbLeft = `calc(4px + ${(clampZoomValue(value) / 100).toFixed(4)} * (100% - 8px))`;
 
   return (
-    <div className="flex items-center gap-1 rounded-md border border-border/70 bg-background/70 px-1 py-0.5">
+    <div className="flex items-center gap-1 rounded-md bg-muted/25 px-1 py-0.5">
       <span className="flex h-4 w-4 items-center justify-center text-muted-foreground">{icon}</span>
       <button
         ref={trackRef}
@@ -2896,7 +2896,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
       ticks.map((frame) => (
         <div
           key={frame}
-          className="absolute inset-y-0 border-l border-border/60"
+          className="absolute inset-y-0 border-l border-border/35"
           style={{ left: frameToX(frame) }}
         >
           <span className="absolute top-0.5 left-1 text-[10px] text-muted-foreground">
@@ -3033,7 +3033,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
             min={PROPERTY_VALUE_RANGES[row.property].min}
             max={PROPERTY_VALUE_RANGES[row.property].max}
             inputMode="decimal"
-            className="h-[18px] w-[44px] border-border/70 bg-background/85 px-1 py-0 text-right text-[9px] leading-none tabular-nums md:text-[9px]"
+            className="h-[18px] w-[44px] border-0 bg-muted/25 px-1 py-0 text-right text-[9px] leading-none tabular-nums ring-1 ring-inset ring-border/25 md:text-[9px]"
             disabled={
               disabled ||
               rowLocked ||
@@ -3042,7 +3042,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
             }
             aria-label={`${PROPERTY_LABELS[row.property]} value at playhead`}
           />
-          <div className="flex items-center gap-0 rounded-sm border border-border/70 bg-background/85 px-0">
+          <div className="flex items-center gap-0 rounded-sm bg-muted/25 px-0 ring-1 ring-inset ring-border/25">
             <Button
               type="button"
               variant="ghost"
@@ -3255,7 +3255,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
               {group.label}
             </span>
           </button>
-          <div className="ml-auto flex items-center gap-0 rounded-sm border border-border/70 bg-background/90 px-px shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="ml-auto flex items-center gap-0 rounded-sm bg-muted/25 px-px ring-1 ring-inset ring-border/25">
             <Button
               type="button"
               variant="ghost"
@@ -3372,12 +3372,12 @@ export const DopesheetEditor = memo(function DopesheetEditor({
           return (
             <div
               key={entry.group.id}
-              className="grid w-full border-b border-border/60"
+              className="grid w-full border-b border-border/35"
               style={{ ...propertyGridStyle, height: GROUP_HEADER_HEIGHT }}
             >
               {renderGroupHeaderContent(entry.group)}
               <div
-                className="relative border-l border-border/60 bg-muted/20 overflow-hidden"
+                className="relative border-l border-border/35 bg-muted/20 overflow-hidden"
                 onPointerDown={handleTimelineBackgroundPointerDown}
               >
                 {ticks.map((frame) => (
@@ -3452,10 +3452,10 @@ export const DopesheetEditor = memo(function DopesheetEditor({
         const { row } = entry;
         const rowLocked = isPropertyLocked(row.property);
         return (
-          <div key={row.property} className="grid border-b border-border/60" style={{ ...propertyGridStyle, height: ROW_HEIGHT }}>
+          <div key={row.property} className="grid border-b border-border/35" style={{ ...propertyGridStyle, height: ROW_HEIGHT }}>
             {renderPropertyRowContent(row, { indented: true })}
             <div
-              className="relative border-l border-border/60 overflow-hidden"
+              className="relative border-l border-border/35 overflow-hidden"
               onPointerDown={(event) => handleRowPointerDown(row.property, event)}
             >
               {ticks.map((frame) => (
@@ -3571,7 +3571,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
         const elements: React.ReactNode[] = [
           <div
             key={group.id}
-            className="h-6 border-b border-border/60"
+            className="h-6 border-b border-border/35"
           >
             {renderGroupHeaderContent(group)}
           </div>,
@@ -3583,7 +3583,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
 
         return elements.concat(
           group.rows.map((row) => (
-            <div key={row.property} className="border-b border-border/60" style={{ height: ROW_HEIGHT }}>
+            <div key={row.property} className="border-b border-border/35" style={{ height: ROW_HEIGHT }}>
               {renderPropertyRowContent(row, { indented: true })}
             </div>
           ))
@@ -3596,10 +3596,10 @@ export const DopesheetEditor = memo(function DopesheetEditor({
     : 'No keyframes to display';
 
   return (
-    <div className={cn('flex h-full flex-col gap-0.5 overflow-hidden', className)} style={{ height, width }}>
-      <div className="flex items-center justify-between px-2 flex-shrink-0 min-h-7">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
+    <div className={cn('flex h-full flex-col gap-0 overflow-hidden', className)} style={{ height, width }}>
+      <div className="flex min-h-7 flex-shrink-0 items-center justify-between gap-2 overflow-hidden px-2">
+        <div className="flex min-h-7 min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex shrink-0 items-center gap-1">
             <span className="text-xs text-muted-foreground">Parameters</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -3655,22 +3655,25 @@ export const DopesheetEditor = memo(function DopesheetEditor({
           </div>
 
           {hasPropertyFilters && (
-            <span className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            <span className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
               Filtered
             </span>
           )}
 
           {resolvedVisualizationMode === 'graph' && graphDisplayProperty && (
-            <span className="text-xs text-muted-foreground">
+            <span
+              className="min-w-0 max-w-[min(11rem,32vw)] truncate text-xs text-muted-foreground"
+              title={`Graph: ${PROPERTY_LABELS[graphDisplayProperty]}`}
+            >
               Graph: {PROPERTY_LABELS[graphDisplayProperty]}
             </span>
           )}
 
-          <span className="text-xs text-muted-foreground">
+          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
             {visibleKeyframes.length} keyframe{visibleKeyframes.length !== 1 ? 's' : ''}
           </span>
 
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <div className="flex items-center gap-0.5">
               <span className="text-[10px] text-muted-foreground">Local</span>
               <Input
@@ -3732,10 +3735,10 @@ export const DopesheetEditor = memo(function DopesheetEditor({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {resolvedVisualizationMode === 'graph' && interpolationOptions.length > 0 && (
             <div
-              className="flex items-center gap-0.5 rounded-md border border-border/80 bg-muted/20 px-0.5 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+              className="flex items-center gap-0.5 rounded-md bg-muted/25 px-0.5 py-0.5"
               aria-label="Interpolation controls"
             >
               {interpolationOptions.map((option) => {
@@ -3762,7 +3765,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
             </div>
           )}
           {(onCopyKeyframes || onCutKeyframes || onPasteKeyframes) && (
-            <div className="flex items-center gap-0.5 rounded-md border border-border/70 bg-background/85 px-0.5 py-0.5">
+            <div className="flex items-center gap-0.5 rounded-md bg-muted/25 px-0.5 py-0.5">
               <Button
                 variant="ghost"
                 size="sm"
@@ -3803,7 +3806,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
               )}
             </div>
           )}
-          <div className="flex items-center rounded-md border border-border/70 bg-background/85 px-0.5 py-0.5">
+          <div className="flex items-center rounded-md bg-muted/25 px-0.5 py-0.5">
             <Button
               variant="ghost"
               size="sm"
@@ -3899,7 +3902,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
 
       <div
         className={cn(
-          'border border-border rounded-md flex-1 min-h-0 overflow-hidden relative',
+          'relative flex-1 min-h-0 overflow-hidden rounded-lg bg-muted/10 ring-1 ring-border/25',
           disabled && 'opacity-60 pointer-events-none'
         )}
         onWheel={resolvedVisualizationMode === 'dopesheet' ? handleWheel : undefined}
@@ -3917,14 +3920,14 @@ export const DopesheetEditor = memo(function DopesheetEditor({
         </div>
         {resolvedVisualizationMode === 'graph' ? (
           <>
-            <div className="grid border-b border-border bg-muted/25" style={propertyGridStyle}>
+            <div className="grid border-b border-border/40 bg-muted/15" style={propertyGridStyle}>
               <div className="px-1 flex items-center text-[10px] font-medium text-muted-foreground" style={{ height: RULER_HEIGHT }}>
                 Property
               </div>
               <div
                 data-testid="dopesheet-ruler"
                 ref={timelineRef}
-                className="relative border-l border-border cursor-ew-resize overflow-hidden"
+                className="relative cursor-ew-resize overflow-hidden border-l border-border/30"
                 style={{ height: RULER_HEIGHT }}
                 onPointerDown={handleRulerPointerDown}
                 onPointerMove={handleRulerPointerMove}
@@ -3941,14 +3944,17 @@ export const DopesheetEditor = memo(function DopesheetEditor({
               </div>
             ) : (
               <div className="flex min-h-0" style={{ height: `calc(100% - ${RULER_HEIGHT}px)` }}>
-                <div className="flex-shrink-0 overflow-auto" style={{ width: PROPERTY_COLUMN_WIDTH }}>
+                <div
+                  className="flex-shrink-0 overflow-x-hidden overflow-y-auto"
+                  style={{ width: PROPERTY_COLUMN_WIDTH }}
+                >
                   {propertyColumnElements}
                 </div>
                 <div
                   ref={graphPaneRef}
                   data-testid="dopesheet-graph-pane"
                   tabIndex={disabled || graphDisplayPropertyLocked ? undefined : -1}
-                  className="min-w-0 flex-1 border-l border-border/60 outline-none"
+                  className="min-w-0 flex-1 border-l border-border/25 outline-none"
                   onMouseEnter={focusGraphPane}
                   onPointerDownCapture={focusGraphPane}
                   onKeyDown={handleGraphPaneKeyDown}
@@ -3999,14 +4005,14 @@ export const DopesheetEditor = memo(function DopesheetEditor({
           </>
         ) : (
           <>
-            <div className="grid border-b border-border bg-muted/25" style={propertyGridStyle}>
+            <div className="grid border-b border-border/40 bg-muted/15" style={propertyGridStyle}>
               <div className="px-1 flex items-center text-[10px] font-medium text-muted-foreground" style={{ height: RULER_HEIGHT }}>
                 Property
               </div>
               <div
                 data-testid="dopesheet-ruler"
                 ref={timelineRef}
-                className="relative border-l border-border cursor-ew-resize overflow-hidden"
+                className="relative cursor-ew-resize overflow-hidden border-l border-border/30"
                 style={{ height: RULER_HEIGHT }}
                 onPointerDown={handleRulerPointerDown}
                 onPointerMove={handleRulerPointerMove}
@@ -4017,7 +4023,11 @@ export const DopesheetEditor = memo(function DopesheetEditor({
               </div>
             </div>
 
-            <div ref={scrollAreaRef} className="overflow-auto" style={{ height: `calc(100% - ${RULER_HEIGHT}px)` }}>
+            <div
+              ref={scrollAreaRef}
+              className="dopesheet-scroll-area overflow-auto"
+              style={{ height: `calc(100% - ${RULER_HEIGHT}px)` }}
+            >
               {sheetRows.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
                   {emptyStateMessage}
@@ -4049,7 +4059,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
       </div>
       {resolvedVisualizationMode === 'graph' && (
         <div className="grid" style={propertyGridStyle}>
-          <div className="h-4 border-t border-r border-border/60 bg-background/80" />
+          <div className="h-4 border-t border-border/25 bg-muted/10" />
           <div data-testid="keyframe-timing-strip-viewport-column">
             <KeyframeTimingStrip
               viewport={viewport}
@@ -4068,7 +4078,7 @@ export const DopesheetEditor = memo(function DopesheetEditor({
       <div className="grid" style={propertyGridStyle}>
         <div
           data-testid="keyframe-navigator-property-column"
-          className="h-5 border-t border-r border-border/60 bg-background/80"
+          className="h-5 border-t border-border/25 bg-muted/10"
         />
         <div data-testid="keyframe-navigator-viewport-column">
           <CompactNavigator
