@@ -8,12 +8,11 @@ import {
 } from '@/components/ui/context-menu';
 import { cn } from '@/shared/ui/cn';
 import type { SmartTrimIntent } from '../../utils/smart-trim-zones';
-
-interface EdgeColors {
-  edge: string;
-  glow: string;
-  fade: string;
-}
+import {
+  type EdgeColors,
+  CONSTRAINED_COLORS,
+  FREE_COLORS,
+} from './trim-handle-colors';
 
 const TRIM_COLORS: EdgeColors = {
   edge: 'rgba(255, 255, 255, 0.85)',
@@ -31,18 +30,6 @@ const ROLL_COLORS: EdgeColors = {
   edge: 'rgba(251, 191, 36, 0.9)',
   glow: '0 0 8px rgba(251, 191, 36, 0.6)',
   fade: 'rgba(251, 191, 36, 0.35)',
-};
-
-export const CONSTRAINED_COLORS: EdgeColors = {
-  edge: 'rgba(239, 68, 68, 0.9)',
-  glow: '0 0 8px rgba(239, 68, 68, 0.5)',
-  fade: 'rgba(239, 68, 68, 0.3)',
-};
-
-export const FREE_COLORS: EdgeColors = {
-  edge: 'rgba(74, 222, 128, 0.9)',
-  glow: '0 0 8px rgba(74, 222, 128, 0.5)',
-  fade: 'rgba(74, 222, 128, 0.3)',
 };
 
 /** Describes which edges are actively being operated on and their constraint state */

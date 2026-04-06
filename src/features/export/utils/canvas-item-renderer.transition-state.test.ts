@@ -57,7 +57,10 @@ describe('resolveTransitionParticipantRenderState', () => {
       canvasPool: {} as ItemRenderContext['canvasPool'],
       textMeasureCache: {} as ItemRenderContext['textMeasureCache'],
       renderMode: 'preview',
-      getCurrentItemSnapshot: <TItem extends TimelineItem>(_item: TItem) => currentItem as TItem,
+      getCurrentItemSnapshot: <TItem extends TimelineItem>(_item: TItem) => {
+        void _item;
+        return currentItem as TItem;
+      },
       getCurrentKeyframes: () => undefined,
       getPreviewTransformOverride: (itemId) => (
         itemId === baseItem.id

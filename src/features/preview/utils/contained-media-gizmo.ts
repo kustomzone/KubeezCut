@@ -1,6 +1,6 @@
 import type { TimelineItem } from '@/types/timeline';
 import type { CropSettings } from '@/types/transform';
-import { getSourceDimensions } from '@/features/composition-runtime/utils/transform-resolver';
+import { getSourceDimensions } from '@/features/preview/deps/composition-runtime';
 import { calculateMediaCropLayout } from '@/shared/utils/media-crop';
 
 /**
