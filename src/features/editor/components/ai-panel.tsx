@@ -406,7 +406,7 @@ export const AiPanel = memo(function AiPanel() {
   }, []);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-3">
+    <div className="min-h-0">
       <div className="space-y-4">
         {/* Header */}
         <div className="flex items-center gap-2">
@@ -492,7 +492,7 @@ export const AiPanel = memo(function AiPanel() {
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[min(280px,50vh)]">
                 {KITTEN_TTS_MODEL_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value} className="text-xs">
                     {option.label} ({option.downloadLabel})
@@ -508,7 +508,7 @@ export const AiPanel = memo(function AiPanel() {
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[min(280px,50vh)]">
                 {KITTEN_TTS_VOICE_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value} className="text-xs">
                     {option.label}

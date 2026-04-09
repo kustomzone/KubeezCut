@@ -799,8 +799,10 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
             <TransitionsPanel />
           </div>
 
-          {/* AI Tab */}
-          <div className={`min-h-0 flex-1 overflow-hidden ${activeTab === 'ai' ? 'block' : 'hidden'}`}>
+          {/* AI Tab — overflow-y-auto on wrapper so flex-1 child gets a bounded height (same pattern as Text tab). */}
+          <div
+            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable] ${activeTab === 'ai' ? 'block' : 'hidden'}`}
+          >
             <AiPanel />
           </div>
             </>
