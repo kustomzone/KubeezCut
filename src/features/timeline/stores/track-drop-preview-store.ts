@@ -7,6 +7,7 @@ export interface TrackDropGhostPreview {
   label: string;
   type: 'composition' | DroppableMediaType | 'external-file' | 'text' | 'shape' | 'adjustment';
   targetTrackId: string;
+  previewBelowTrackId?: string;
 }
 
 interface TrackDropPreviewState {

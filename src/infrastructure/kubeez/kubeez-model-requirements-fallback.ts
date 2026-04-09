@@ -90,9 +90,11 @@ const EXACT: Record<string, Partial<KubeezMediaModelOption>> = {
   'gpt-1.5-image-medium': { prompt_max_chars: 3000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
   'gpt-1.5-image-high': { prompt_max_chars: 3000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
 
-  'qwen-image-2': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
+  'qwen-text-to-image': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
+  'qwen-image-to-image': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
 
-  'p-image-edit': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
+  /** Image edit: output aspect follows input — hide ratio picker (website: aspect_ratio auto). */
+  'p-image-edit': { prompt_max_chars: 5000, showAspectRatio: false },
 
   'logo-maker': { prompt_max_chars: 10_000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
 

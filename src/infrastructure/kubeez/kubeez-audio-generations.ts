@@ -1,5 +1,6 @@
 import { rewriteKubeezMediaCdnUrlForFetch } from '@/infrastructure/kubeez/kubeez-cdn-fetch-url';
 import { extractKubeezPollStatus, isKubeezPlainObject } from '@/infrastructure/kubeez/kubeez-poll-status';
+import { readKubeezSseUntilResult } from '@/infrastructure/kubeez/kubeez-sse';
 import { createLogger } from '@/shared/logging/logger';
 import { DEFAULT_VOICE_ID, TEXT_TO_DIALOGUE_VOICES } from '@kubeez-website/data/textToDialogueVoices';
 import { resolveKubeezApiBaseUrl } from './kubeez-text-to-image';
@@ -27,6 +28,8 @@ export const KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS: { id: string; label: string }[] =
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_ATTEMPTS = 150;
+const MUSIC_SSE_REFRESH_MS = 1000;
+const MUSIC_STREAM_STATUS_RETRIES = 10;
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -280,6 +283,52 @@ async function tryResolveMusicCompletionPayload(
   return null;
 }
 
+/**
+ * Each poll tick: prefer `GET /v1/generate/music/{id}`; on 404 only, try unified media status.
+ * Never permanently switch to only the media URL — early music 404 is often "not registered yet",
+ * while later 200s (with songs) appear only on the music route for music jobs.
+ */
+async function fetchMusicJobStatusOr404Pair(params: {
+  root: string;
+  apiKey: string;
+  generationId: string;
+  signal?: AbortSignal;
+}): Promise<
+  | { ok: true; body: unknown; via: 'music' | 'media' }
+  | { ok: false; kind: 'not_ready' }
+  | { ok: false; kind: 'error'; message: string }
+> {
+  const { root, apiKey, generationId, signal } = params;
+  const musicUrl = `${root}/v1/generate/music/${encodeURIComponent(generationId)}`;
+  const mediaUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}`;
+  const headers = { 'X-API-Key': apiKey };
+
+  const musicRes = await fetch(musicUrl, { headers, signal });
+  const musicBody = await parseJsonResponse(musicRes);
+
+  if (musicRes.ok) {
+    return { ok: true, body: musicBody, via: 'music' };
+  }
+
+  if (musicRes.status === 404) {
+    const mediaRes = await fetch(mediaUrl, { headers, signal });
+    const mediaBody = await parseJsonResponse(mediaRes);
+    if (mediaRes.ok) {
+      return { ok: true, body: mediaBody, via: 'media' };
+    }
+    if (mediaRes.status === 404) {
+      return { ok: false, kind: 'not_ready' };
+    }
+    const msg =
+      extractErrorMessage(mediaBody) ?? `Music status check failed (${mediaRes.status})`;
+    return { ok: false, kind: 'error', message: msg };
+  }
+
+  const msg =
+    extractErrorMessage(musicBody) ?? `Music status check failed (${musicRes.status})`;
+  return { ok: false, kind: 'error', message: msg };
+}
+
 async function pollKubeezMusicJob(params: {
   root: string;
   apiKey: string;
@@ -287,59 +336,67 @@ async function pollKubeezMusicJob(params: {
   signal?: AbortSignal;
 }): Promise<KubeezMusicFileResult[]> {
   const { root, apiKey, generationId, signal } = params;
-  let pollUrl = `${root}/v1/generate/music/${encodeURIComponent(generationId)}`;
-  let switchedMusicToMediaPoll = false;
+  const mediaUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}`;
+  const musicUrl = `${root}/v1/generate/music/${encodeURIComponent(generationId)}`;
+  const musicStreamUrl = `${root}/v1/generate/music/${encodeURIComponent(generationId)}/stream`;
+
+  try {
+    const streamed = await readKubeezSseUntilResult({ url: musicStreamUrl, apiKey, signal });
+    const fromStream = await tryResolveMusicCompletionPayload(streamed, signal);
+    if (fromStream && fromStream.length > 0) {
+      return fromStream;
+    }
+    for (let r = 0; r < MUSIC_STREAM_STATUS_RETRIES; r++) {
+      await sleep(MUSIC_SSE_REFRESH_MS, signal);
+      const polled = await fetchMusicJobStatusOr404Pair({ root, apiKey, generationId, signal });
+      if (!polled.ok) {
+        if (polled.kind === 'error') {
+          throw new Error(polled.message);
+        }
+        continue;
+      }
+      const resolved = await tryResolveMusicCompletionPayload(polled.body, signal);
+      if (resolved && resolved.length > 0) {
+        return resolved;
+      }
+    }
+  } catch (e) {
+    if (import.meta.env.DEV) {
+      logger.debug('Kubeez music SSE failed or incomplete; using poll', e);
+    }
+  }
 
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     await sleep(POLL_INTERVAL_MS, signal);
 
-    let statusRes = await fetch(pollUrl, {
-      headers: { 'X-API-Key': apiKey },
-      signal,
-    });
+    const polled = await fetchMusicJobStatusOr404Pair({ root, apiKey, generationId, signal });
 
-    // Kubeez may only expose async status on unified GET /v1/generate/media/{id};
-    // the music-specific route can return 404 with body `{ error: "not_found" }` while the job runs fine.
-    if (statusRes.status === 404 && pollUrl.includes('/v1/generate/music/')) {
-      switchedMusicToMediaPoll = true;
-      pollUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}`;
-      if (import.meta.env.DEV) {
-        logger.debug('Kubeez music poll 404 — switching to unified media status', {
-          generationId,
-          attempt,
-        });
-      }
-      statusRes = await fetch(pollUrl, {
-        headers: { 'X-API-Key': apiKey },
-        signal,
-      });
-    }
-
-    const statusBody = await parseJsonResponse(statusRes);
-
-    if (!statusRes.ok) {
-      // GET /v1/generate/music/{id} or unified /v1/generate/media/{id} may 404 until the job exists.
-      if (statusRes.status === 404) {
+    if (!polled.ok) {
+      if (polled.kind === 'not_ready') {
         if (import.meta.env.DEV && attempt % 5 === 0) {
-          logger.debug('Kubeez music poll 404 — status not yet available', {
+          logger.debug('Kubeez music poll 404 — status not yet available (music + media)', {
             generationId,
             attempt,
-            pollTail: pollUrl.slice(-48),
           });
         }
         continue;
       }
-      const msg = extractErrorMessage(statusBody) ?? `Status check failed (${statusRes.status})`;
-      throw new Error(msg);
+      throw new Error(polled.message);
     }
 
+    const { body: statusBody, via } = polled;
     const status = extractKubeezPollStatus(statusBody);
     if (import.meta.env.DEV && attempt % 5 === 0) {
-      logger.debug('Kubeez music poll', { generationId, status, attempt, pollTail: pollUrl.slice(-48) });
+      logger.debug('Kubeez music poll', { generationId, status, attempt, via });
     }
 
     if (status === 'failed' || status === 'error') {
       throw new Error(extractErrorMessage(statusBody) ?? 'Music generation failed');
+    }
+
+    const resolvedNow = await tryResolveMusicCompletionPayload(statusBody, signal);
+    if (resolvedNow && resolvedNow.length > 0) {
+      return resolvedNow;
     }
 
     const terminalOk =
@@ -353,22 +410,21 @@ async function pollKubeezMusicJob(params: {
       status === 'finished';
 
     if (terminalOk) {
-      const resolved = await tryResolveMusicCompletionPayload(statusBody, signal);
-      if (resolved && resolved.length > 0) {
-        return resolved;
-      }
-
-      if (!switchedMusicToMediaPoll && pollUrl.includes('/v1/generate/music/')) {
-        switchedMusicToMediaPoll = true;
-        pollUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}`;
-        continue;
+      const otherUrl = via === 'music' ? mediaUrl : musicUrl;
+      const otherRes = await fetch(otherUrl, { headers: { 'X-API-Key': apiKey }, signal });
+      if (otherRes.ok) {
+        const otherBody = await parseJsonResponse(otherRes);
+        const resolvedOther = await tryResolveMusicCompletionPayload(otherBody, signal);
+        if (resolvedOther && resolvedOther.length > 0) {
+          return resolvedOther;
+        }
       }
 
       if (import.meta.env.DEV && attempt % 5 === 0) {
         logger.debug('Kubeez music poll — terminal but audio URLs not ready yet', {
           generationId,
           attempt,
-          switchedMusicToMediaPoll,
+          via,
         });
       }
       continue;
@@ -385,24 +441,35 @@ async function pollKubeezDialogueJob(params: {
   signal?: AbortSignal;
 }): Promise<Blob> {
   const { root, apiKey, generationId, signal } = params;
-  let pollUrl = `${root}/v1/generate/dialogue/${encodeURIComponent(generationId)}`;
-  let triedDialogueMedia404Fallback = false;
+  /** OpenAPI: dialogue jobs track on **media** status / stream, not `/generate/dialogue/{id}`. */
+  const pollUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}`;
+  const mediaStreamUrl = `${pollUrl}/stream`;
+
+  try {
+    const streamed = await readKubeezSseUntilResult({ url: mediaStreamUrl, apiKey, signal });
+    const status = extractKubeezPollStatus(streamed);
+    if (status === 'failed' || status === 'error') {
+      throw new Error(extractErrorMessage(streamed) ?? 'Audio generation failed');
+    }
+    const audioUrl = firstAudioOutputUrl(streamed);
+    if (audioUrl) {
+      return downloadAudioUrl(audioUrl, signal);
+    }
+  } catch (e) {
+    if (import.meta.env.DEV) {
+      logger.debug('Kubeez dialogue SSE failed; polling media status', e);
+    }
+  }
 
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-    await sleep(POLL_INTERVAL_MS, signal);
+    if (attempt > 0) {
+      await sleep(POLL_INTERVAL_MS, signal);
+    }
 
-    let statusRes = await fetch(pollUrl, {
+    const statusRes = await fetch(pollUrl, {
       headers: { 'X-API-Key': apiKey },
       signal,
     });
-    if (statusRes.status === 404 && !triedDialogueMedia404Fallback) {
-      triedDialogueMedia404Fallback = true;
-      pollUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}`;
-      statusRes = await fetch(pollUrl, {
-        headers: { 'X-API-Key': apiKey },
-        signal,
-      });
-    }
     const statusBody = await parseJsonResponse(statusRes);
 
     if (!statusRes.ok) {
@@ -411,7 +478,6 @@ async function pollKubeezDialogueJob(params: {
           logger.debug('Kubeez dialogue poll 404 — status not yet available', {
             generationId,
             attempt,
-            pollTail: pollUrl.slice(-48),
           });
         }
         continue;
@@ -422,7 +488,7 @@ async function pollKubeezDialogueJob(params: {
 
     const status = extractKubeezPollStatus(statusBody);
     if (import.meta.env.DEV && attempt % 5 === 0) {
-      logger.debug('Kubeez dialogue poll', { generationId, status, attempt, pollTail: pollUrl.slice(-48) });
+      logger.debug('Kubeez dialogue poll', { generationId, status, attempt });
     }
 
     if (status === 'failed' || status === 'error') {
@@ -448,7 +514,6 @@ async function pollKubeezDialogueJob(params: {
         logger.debug('Kubeez dialogue poll — terminal but no audio URL yet', {
           generationId,
           attempt,
-          triedDialogueMedia404Fallback,
         });
       }
       continue;

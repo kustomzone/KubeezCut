@@ -127,7 +127,7 @@ describe('planTrackMediaDropPlacements', () => {
     expect(result.plannedItems).toEqual([]);
   });
 
-  it('rejects audio media dropped on a video track', () => {
+  it('creates an audio lane when audio is dropped on a video-only stack', () => {
     const tracks = createDefaultClassicTracks(72);
 
     const result = planTrackMediaDropPlacements({
@@ -143,7 +143,12 @@ describe('planTrackMediaDropPlacements', () => {
       dropTargetTrackId: 'track-1',
     });
 
-    expect(result.plannedItems).toEqual([]);
+    expect(result.plannedItems).toHaveLength(1);
+    const placement = result.plannedItems[0]!.placements[0];
+    expect(placement).toMatchObject({ mediaType: 'audio', from: 12, durationInFrames: 90 });
+    const host = result.tracks.find((t) => t.id === placement!.trackId);
+    expect(getTrackKind(host!)).toBe('audio');
+    expect(result.tracks.filter((t) => getTrackKind(t) === 'audio')).toHaveLength(1);
   });
 });
 
@@ -164,16 +169,63 @@ describe('buildGhostPreviewsFromTrackMediaDropPlan', () => {
       dropTargetTrackId: 'track-1',
     });
 
+    const existingIds = new Set(tracks.map((t) => t.id));
     const ghosts = buildGhostPreviewsFromTrackMediaDropPlan({
       plannedItems,
       frameToPixels: (frame) => frame,
+      existingTrackIds: existingIds,
+      dropTargetTrackId: 'track-1',
     });
 
     const audioTrackId = plannedItems[0]!.placements.find((placement) => placement.mediaType === 'audio')?.trackId;
     expect(audioTrackId).toBeDefined();
     expect(ghosts).toEqual([
       expect.objectContaining({ targetTrackId: 'track-1', type: 'video', left: 24, width: 90 }),
-      expect.objectContaining({ targetTrackId: audioTrackId, type: 'audio', left: 24, width: 90 }),
+      expect.objectContaining({
+        targetTrackId: audioTrackId,
+        type: 'audio',
+        left: 24,
+        width: 90,
+        previewBelowTrackId: 'track-1',
+      }),
+    ]);
+  });
+
+  it('sets previewBelowTrackId when first audio lane is planned under V1', () => {
+    const tracks = createDefaultClassicTracks(72);
+    const { plannedItems } = planTrackMediaDropPlacements({
+      entries: [{
+        payload: { id: 'm1' },
+        label: 'clip.mp3',
+        mediaType: 'audio',
+        durationInFrames: 90,
+      }],
+      dropFrame: 12,
+      tracks,
+      existingItems: [],
+      dropTargetTrackId: 'track-1',
+    });
+
+    expect(plannedItems).toHaveLength(1);
+    const placement = plannedItems[0]!.placements[0]!;
+    expect(placement.trackId).not.toBe('track-1');
+    expect(placement.mediaType).toBe('audio');
+
+    const ghosts = buildGhostPreviewsFromTrackMediaDropPlan({
+      plannedItems,
+      frameToPixels: (frame) => frame,
+      existingTrackIds: new Set(tracks.map((t) => t.id)),
+      dropTargetTrackId: 'track-1',
+    });
+
+    expect(ghosts).toEqual([
+      expect.objectContaining({
+        targetTrackId: placement.trackId,
+        previewBelowTrackId: 'track-1',
+        type: 'audio',
+        left: 12,
+        width: 90,
+      }),
     ]);
   });
 });

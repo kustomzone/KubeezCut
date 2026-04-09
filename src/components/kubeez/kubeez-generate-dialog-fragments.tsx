@@ -47,7 +47,6 @@ function modelMatchesSearch(m: KubeezMediaModelOption, needle: string): boolean 
 
 export interface KubeezGenerateModelsColumnProps {
   missingKey: boolean;
-  modelsHint: string | null;
   imageModels: KubeezMediaModelOption[];
   videoModels: KubeezMediaModelOption[];
   musicModels: KubeezMediaModelOption[];
@@ -674,6 +673,38 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
               );
             })}
           </div>
+        </div>
+      ) : null}
+
+      {resolvedModelId === 'p-image-edit' ? (
+        <div className="space-y-2 border-t border-border/50 pt-3">
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Speed</p>
+          <div className="flex flex-wrap gap-1">
+            {(
+              [
+                { id: true as const, label: 'Turbo' },
+                { id: false as const, label: 'Standard' },
+              ] as const
+            ).map(({ id, label }) => {
+              const active = (modelSettings.pImageEditTurbo ?? true) === id;
+              return (
+                <Button
+                  key={label}
+                  type="button"
+                  size="sm"
+                  variant={active ? 'default' : 'outline'}
+                  disabled={disabled}
+                  className="h-7 min-w-[4.5rem] px-2 text-[11px]"
+                  onClick={() => onPatchModelSettings({ pImageEditTurbo: id })}
+                >
+                  {label}
+                </Button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            Turbo maps to <span className="font-mono text-foreground/80">quality: turbo</span> on the Kubeez API.
+          </p>
         </div>
       ) : null}
 
@@ -1480,7 +1511,12 @@ function ModelGrid(props: {
     );
   }
   return (
-    <div role="listbox" aria-labelledby="kubeez-model-label" aria-multiselectable={false} className={MODEL_GRID_CLASS}>
+    <div
+      role="listbox"
+      aria-label="Models"
+      aria-multiselectable={false}
+      className={MODEL_GRID_CLASS}
+    >
       {items.map((entry) => {
         if (entry.kind === 'model-family') {
           return (
@@ -1531,7 +1567,6 @@ function ModelGrid(props: {
 
 export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColumn({
   missingKey,
-  modelsHint,
   imageModels,
   videoModels,
   musicModels,
@@ -1605,22 +1640,15 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
         </p>
       )}
 
-      {modelsHint && !missingKey && (
-        <p className="mb-2 shrink-0 text-xs text-muted-foreground">{modelsHint}</p>
-      )}
-
       <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <Label id="kubeez-model-label" className="text-sm font-medium">
-            Models
-          </Label>
-          {modelsLoading && (
+        {modelsLoading && (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
               Loading…
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         <Tabs
           value={modelTab}

@@ -102,10 +102,58 @@ self.onmessage = async (event: MessageEvent<WaveformWorkerMessage>) => {
     });
     disposeInput = input as { dispose?: () => void };
 
-    // Get primary audio track
+    // Get primary audio track (video-only clips have none — still emit a flat waveform for UI/meter).
     const audioTrack = await input.getPrimaryAudioTrack();
     if (!audioTrack) {
-      throw new Error('No audio track found');
+      const durationRaw = await input.computeDuration();
+      const duration =
+        typeof durationRaw === 'number' && Number.isFinite(durationRaw) && durationRaw > 0
+          ? durationRaw
+          : 1;
+      if (state.aborted) {
+        throw new Error('Aborted');
+      }
+
+      const stereo = false;
+      const channels = 1;
+      const numOutputSamples = Math.max(1, Math.ceil(duration * samplesPerSecond));
+      const peaks = new Float32Array(numOutputSamples);
+      const binSampleCount = Math.max(1, Math.round(samplesPerSecond * binDurationSec));
+
+      self.postMessage({ type: 'progress', requestId, progress: 20 } as WaveformProgressResponse);
+      self.postMessage({
+        type: 'init',
+        requestId,
+        duration,
+        channels,
+        sampleRate: samplesPerSecond,
+        totalSamples: peaks.length,
+        stereo,
+      } as WaveformInitResponse);
+
+      let nextChunkStart = 0;
+      while (nextChunkStart < peaks.length) {
+        const end = Math.min(nextChunkStart + binSampleCount, peaks.length);
+        const chunk = peaks.slice(nextChunkStart, end);
+        self.postMessage(
+          {
+            type: 'chunk',
+            requestId,
+            startIndex: nextChunkStart,
+            peaks: chunk,
+          } as WaveformChunkResponse,
+          { transfer: [chunk.buffer] }
+        );
+        nextChunkStart = end;
+      }
+
+      self.postMessage({ type: 'progress', requestId, progress: 95 } as WaveformProgressResponse);
+      self.postMessage({
+        type: 'complete',
+        requestId,
+        maxPeak: 0,
+      } as WaveformCompleteResponse);
+      return;
     }
 
     const audioCodec = typeof audioTrack.codec === 'string' ? audioTrack.codec : undefined;

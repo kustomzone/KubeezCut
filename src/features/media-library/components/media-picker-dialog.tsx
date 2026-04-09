@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,10 @@ interface MediaPickerDialogProps {
   onClose: () => void;
   onSelect: (mediaId: string) => void;
   filterType?: 'video' | 'audio' | 'image';
+  /** Extra filter (e.g. Kubeez reference MIME allow-list). Applied after `filterType`. */
+  filterItem?: (media: MediaMetadata) => boolean;
   title?: string;
+  description?: ReactNode;
 }
 
 const typeIcons: Record<string, typeof Video> = {
@@ -97,7 +100,9 @@ export function MediaPickerDialog({
   onClose,
   onSelect,
   filterType,
+  filterItem,
   title = 'Select Media',
+  description,
 }: MediaPickerDialogProps) {
   const mediaItems = useMediaLibraryStore((s) => s.mediaItems);
   const isLoading = useMediaLibraryStore((s) => s.isLoading);
@@ -120,6 +125,10 @@ export function MediaPickerDialog({
       items = items.filter((m) => m.mimeType.startsWith(mimePrefix));
     }
 
+    if (filterItem) {
+      items = items.filter(filterItem);
+    }
+
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -127,7 +136,7 @@ export function MediaPickerDialog({
     }
 
     return items;
-  }, [mediaItems, filterType, searchQuery]);
+  }, [mediaItems, filterType, filterItem, searchQuery]);
 
   const handleSelect = (mediaId: string) => {
     onSelect(mediaId);
@@ -140,7 +149,7 @@ export function MediaPickerDialog({
         <DialogHeader>
           <DialogTitle className="pr-8 leading-snug break-words">{title}</DialogTitle>
           <DialogDescription>
-            Choose a {filterType || 'media'} file from your library.
+            {description ?? `Choose a ${filterType || 'media'} file from your library.`}
           </DialogDescription>
         </DialogHeader>
 

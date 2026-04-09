@@ -107,6 +107,7 @@ export const FALLBACK_TEXT_TO_IMAGE_MODELS: KubeezMediaModelOption[] = withImage
   { model_id: 'imagen-4-fast', display_name: 'Imagen 4 Fast', provider: 'Google' },
   { model_id: 'gpt-1.5-image-medium', display_name: 'GPT 1.5 Image Medium', provider: 'OpenAI' },
   { model_id: 'gpt-1.5-image-high', display_name: 'GPT 1.5 Image High', provider: 'OpenAI' },
+  { model_id: 'p-image-edit', display_name: 'P Image Edit', provider: 'Pruna AI' },
 ]);
 
 interface ApiCapabilities {
@@ -159,6 +160,12 @@ function parseStringArray(v: unknown): string[] | undefined {
   if (!Array.isArray(v)) return undefined;
   const out = v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map((s) => s.trim());
   return out.length > 0 ? out : undefined;
+}
+
+/** Match Kubeez `generation_types` entries (API may use `image-to-image`, `IMAGE_TO_IMAGE`, etc.). */
+function generationTypesInclude(types: unknown[], needle: string): boolean {
+  const n = needle.toLowerCase().replace(/_/g, '-');
+  return types.some((t) => typeof t === 'string' && t.toLowerCase().replace(/_/g, '-') === n);
 }
 
 function parseAspectRatioUi(cap: ApiCapabilities | undefined): {
@@ -297,10 +304,28 @@ function mergeMusicCatalogWithEngineStubs(models: KubeezMediaModelOption[]): Kub
   return sortByDisplayName(merged);
 }
 
-function parseModelsFromResponse(
+/**
+ * Image models the public catalog should always offer; `GET /v1/models` may omit rows (same idea as music stubs).
+ */
+function mergeImageCatalogWithStubs(models: KubeezMediaModelOption[]): KubeezMediaModelOption[] {
+  if (models.some((m) => m.model_id === 'p-image-edit')) return models;
+  const [stub] = finalizeModels(
+    withImageKind([{ model_id: 'p-image-edit', display_name: 'P Image Edit', provider: 'Pruna AI' }])
+  );
+  return stub ? sortByDisplayName([...models, stub]) : models;
+}
+
+/**
+ * Image rows from `GET /v1/models?model_type=image`.
+ *
+ * - `generate-catalog`: include text-to-image and image-to-image models (edit / I2I-only rows like
+ *   `p-image-edit` often omit `text-to-image` or set `requires_input_media`). Mirrors video parsing:
+ *   keep a model if it supports image-to-image, or text-to-image without mandatory reference uploads.
+ * - `text-to-image-only`: legacy filter for callers that only want pure T2I rows.
+ */
+function parseImageModelsFromResponse(
   body: unknown,
-  _mediaKind: KubeezMediaModelKind,
-  generationType: 'text-to-image' | 'text-to-video'
+  mode: 'generate-catalog' | 'text-to-image-only'
 ): KubeezMediaModelOption[] {
   const rawModels =
     body && typeof body === 'object' && 'models' in body && Array.isArray((body as { models: unknown }).models)
@@ -311,8 +336,20 @@ function parseModelsFromResponse(
   for (const row of rawModels) {
     if (!row || typeof row !== 'object') continue;
     const types = row.generation_types;
-    if (!Array.isArray(types) || !types.includes(generationType)) continue;
-    if (row.requires_input_media) continue;
+    if (!Array.isArray(types)) continue;
+
+    if (mode === 'text-to-image-only') {
+      if (!generationTypesInclude(types, 'text-to-image')) continue;
+      if (row.requires_input_media) continue;
+    } else {
+      const hasT2I = generationTypesInclude(types, 'text-to-image');
+      const hasI2I = generationTypesInclude(types, 'image-to-image');
+      if (!hasT2I && !hasI2I) continue;
+      const requiresInput = row.requires_input_media === true;
+      const usable = hasI2I || (hasT2I && !requiresInput);
+      if (!usable) continue;
+    }
+
     const n = normalizeImageModel(row);
     if (n) out.push(n);
   }
@@ -458,7 +495,7 @@ export async function fetchKubeezGroupedMediaModels(params: {
 
   const [imageSettled, videoSettled, musicSettled] = await Promise.allSettled([
     fetchModelsForType({ apiKey, baseUrl, signal, modelType: 'image' }).then((body) =>
-      parseModelsFromResponse(body, 'image', 'text-to-image')
+      parseImageModelsFromResponse(body, 'generate-catalog')
     ),
     fetchModelsForType({ apiKey, baseUrl, signal, modelType: 'video' }).then((body) =>
       parseVideoModelsFromResponse(body)
@@ -508,7 +545,7 @@ export async function fetchKubeezGroupedMediaModels(params: {
   let catalogAugmentedFromCache = false;
 
   const imgMerge = mergeWithCacheAugment(imageModels, cache?.imageModels);
-  imageModels = finalizeModels(imgMerge.list);
+  imageModels = mergeImageCatalogWithStubs(finalizeModels(imgMerge.list));
   catalogAugmentedFromCache ||= imgMerge.addedFromCache;
 
   const vidMerge = mergeWithCacheAugment(videoModels, cache?.videoModels);
@@ -552,5 +589,5 @@ export async function fetchKubeezTextToImageModels(params: {
   signal?: AbortSignal;
 }): Promise<KubeezMediaModelOption[]> {
   const body = await fetchModelsForType({ ...params, modelType: 'image' });
-  return finalizeModels(parseModelsFromResponse(body, 'image', 'text-to-image'));
+  return finalizeModels(parseImageModelsFromResponse(body, 'text-to-image-only'));
 }

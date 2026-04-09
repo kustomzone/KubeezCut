@@ -70,6 +70,9 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: true,
         rewrite: (p) => p.replace(/^\/api\/kubeez/, '') || '/',
+        /** Long-lived SSE (e.g. GET .../stream up to ~10m); avoid proxy idle timeouts. */
+        timeout: 0,
+        proxyTimeout: 0,
       },
     },
     headers: {
@@ -90,6 +93,9 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: true,
         rewrite: (p) => p.replace(/^\/api\/kubeez/, '') || '/',
+        /** Long-lived SSE (e.g. GET .../stream up to ~10m); avoid proxy idle timeouts. */
+        timeout: 0,
+        proxyTimeout: 0,
       },
     },
     headers: {

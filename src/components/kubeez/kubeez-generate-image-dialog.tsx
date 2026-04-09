@@ -29,6 +29,11 @@ import { useProjectStore } from '@/features/projects/stores/project-store';
 import { usePlaybackStore } from '@/shared/state/playback';
 import { useTimelineStore } from '@/features/timeline/stores/timeline-store';
 import { useMediaLibraryStore } from '@/features/media-library/stores/media-library-store';
+import { MediaPickerDialog } from '@/features/media-library/components/media-picker-dialog';
+import {
+  FileAccessError,
+  mediaLibraryService,
+} from '@/features/media-library/services/media-library-service';
 import { runKubeezGenerateJobInBackground } from '@/components/kubeez/kubeez-generate-job-runner';
 import { effectiveMaxReferenceFilesForGenerateDialog } from '@/infrastructure/kubeez/kubeez-documented-reference-limits';
 import {
@@ -36,9 +41,16 @@ import {
   getMaxFileSizeForModel,
   isKubeezReferenceFileSizeAllowedForModel,
   isKubeezReferenceMimeAllowed,
+  isKubeezReferenceMimeTypeStringAllowed,
+  KUBEEZ_ACCEPTED_REFERENCE_IMAGE_TYPES,
+  KUBEEZ_ACCEPTED_REFERENCE_VIDEO_TYPES,
   KUBEEZ_REFERENCE_FILE_ACCEPT,
   MAX_INPUT_FILE_SIZE,
 } from '@/infrastructure/kubeez/kubeez-file-restrictions';
+import {
+  isKlingMotionControlModelId,
+  referenceAttachmentsMeetMinimum,
+} from '@/infrastructure/kubeez/kubeez-reference-readiness';
 import { getKubeezOfflineBrowseCatalog } from '@/infrastructure/kubeez/kubeez-offline-browse-catalog';
 import {
   FALLBACK_MUSIC_MODELS,
@@ -69,9 +81,10 @@ import {
   KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS,
   KUBEEZ_DIALOGUE_VOICE_OPTIONS,
 } from '@/infrastructure/kubeez/kubeez-audio-generations';
+import type { MediaMetadata } from '@/types/storage';
 import { toast } from 'sonner';
 import { createLogger } from '@/shared/logging/logger';
-import { Film, Paperclip, X } from 'lucide-react';
+import { Film, Image as ImageIcon, Paperclip, Video, X } from 'lucide-react';
 import { cn } from '@/shared/ui/cn';
 
 const logger = createLogger('KubeezGenerateDialog');
@@ -79,6 +92,9 @@ const logger = createLogger('KubeezGenerateDialog');
 const ASPECT_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4'] as const;
 
 const DEFAULT_MODEL_ID = 'nano-banana-2';
+
+const MOTION_IMAGE_ACCEPT = KUBEEZ_ACCEPTED_REFERENCE_IMAGE_TYPES.join(',');
+const MOTION_VIDEO_ACCEPT = KUBEEZ_ACCEPTED_REFERENCE_VIDEO_TYPES.join(',');
 
 type ReferenceAttachment = {
   id: string;
@@ -121,10 +137,19 @@ export function KubeezGenerateImageDialog({
   const [dialogueLanguage, setDialogueLanguage] = useState('auto');
   const [dialogueStability, setDialogueStability] = useState('0.5');
   const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelsHint, setModelsHint] = useState<string | null>(null);
   const [modelTab, setModelTab] = useState<ModelTab>('all');
   const [referenceAttachments, setReferenceAttachments] = useState<ReferenceAttachment[]>([]);
   const referenceFileInputRef = useRef<HTMLInputElement>(null);
+  const motionImageInputRef = useRef<HTMLInputElement>(null);
+  const motionVideoInputRef = useRef<HTMLInputElement>(null);
+  /** Kling 2.6 / 3.0 motion: separate slots (API expects image then video in `source_media_urls`). */
+  const [motionRefImage, setMotionRefImage] = useState<ReferenceAttachment | null>(null);
+  const [motionRefVideo, setMotionRefVideo] = useState<ReferenceAttachment | null>(null);
+  const [referenceLibraryPickerOpen, setReferenceLibraryPickerOpen] = useState(false);
+  const [motionImageLibraryPickerOpen, setMotionImageLibraryPickerOpen] = useState(false);
+  const [motionVideoLibraryPickerOpen, setMotionVideoLibraryPickerOpen] = useState(false);
+  /** Settings for models not in the family registry (not encoded in `selectedModelId`), e.g. P Image Edit turbo. */
+  const [dialogModelSettings, setDialogModelSettings] = useState<Partial<KubeezModelSettings>>({});
 
   const speechModels = useMemo(() => [KUBEEZ_SPEECH_DIALOGUE_MODEL], []);
 
@@ -164,6 +189,36 @@ export function KubeezGenerateImageDialog({
     [selectedModelId, imageModels, videoModels, musicModels]
   );
 
+  useEffect(() => {
+    setDialogModelSettings({});
+  }, [selectedModelId]);
+
+  const effectiveSettings = useMemo(
+    (): KubeezModelSettings => ({ ...resolvedSelection.settings, ...dialogModelSettings }),
+    [resolvedSelection.settings, dialogModelSettings]
+  );
+
+  useEffect(() => {
+    const mid = resolvedSelection.resolvedModelId;
+    if (isKlingMotionControlModelId(mid)) {
+      setReferenceAttachments((prev) => {
+        for (const r of prev) {
+          if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
+        }
+        return [];
+      });
+    } else {
+      setMotionRefImage((p) => {
+        if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        return null;
+      });
+      setMotionRefVideo((p) => {
+        if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        return null;
+      });
+    }
+  }, [resolvedSelection.resolvedModelId]);
+
   const patchModelSettings = useCallback(
     (patch: Partial<KubeezModelSettings>) => {
       setSelectedModelId((prev) => {
@@ -173,6 +228,10 @@ export function KubeezGenerateImageDialog({
           videoModels,
           musicModels
         );
+        if (!cur.registryEntry && patch.pImageEditTurbo !== undefined) {
+          setDialogModelSettings((s) => ({ ...s, pImageEditTurbo: patch.pImageEditTurbo }));
+          return prev;
+        }
         const nextSettings: KubeezModelSettings = { ...cur.settings, ...patch };
         if (patch.kling26 != null || cur.settings.kling26 != null) {
           nextSettings.kling26 = {
@@ -280,15 +339,54 @@ export function KubeezGenerateImageDialog({
   const isMusicModel = uiModel?.mediaKind === 'music';
   const isSpeechModel = uiModel?.mediaKind === 'speech';
 
+  const jobGenerationVariants = useMemo(() => {
+    let variants = getVariantsForBaseCardId(
+      resolvedSelection.baseCardId,
+      imageModels,
+      videoModels,
+      musicModels
+    );
+    if (variants.length === 0 && uiModel) variants = [uiModel];
+    return variants;
+  }, [resolvedSelection.baseCardId, imageModels, videoModels, musicModels, uiModel]);
+
+  /** Concrete `model_id` sent on generate — keep UI readiness in sync with submit validation. */
+  const mediaGenModelIdForDialog = useMemo(() => {
+    if (!uiModel) return resolvedSelection.resolvedModelId;
+    if (uiModel.mediaKind === 'speech') return selectedModelId || uiModel.model_id;
+    return resolveGenerationModelId({
+      baseCardId: resolvedSelection.baseCardId,
+      settings: effectiveSettings,
+      variants: jobGenerationVariants,
+    });
+  }, [
+    uiModel,
+    resolvedSelection.baseCardId,
+    resolvedSelection.resolvedModelId,
+    selectedModelId,
+    effectiveSettings,
+    jobGenerationVariants,
+  ]);
+
   const referenceFileLimit = useMemo(
     () =>
       effectiveMaxReferenceFilesForGenerateDialog(uiModel ?? null, {
         resolvedModelId: resolvedSelection.resolvedModelId,
         baseCardId: resolvedSelection.baseCardId,
-        settings: resolvedSelection.settings,
+        settings: effectiveSettings,
       }),
-    [uiModel, resolvedSelection.baseCardId, resolvedSelection.resolvedModelId, resolvedSelection.settings]
+    [uiModel, resolvedSelection.baseCardId, resolvedSelection.resolvedModelId, effectiveSettings]
   );
+
+  const effectiveReferenceAttachments = useMemo((): ReferenceAttachment[] => {
+    if (isKlingMotionControlModelId(mediaGenModelIdForDialog)) {
+      const out: ReferenceAttachment[] = [];
+      if (motionRefImage) out.push(motionRefImage);
+      if (motionRefVideo) out.push(motionRefVideo);
+      return out;
+    }
+    return referenceAttachments;
+  }, [mediaGenModelIdForDialog, motionRefImage, motionRefVideo, referenceAttachments]);
 
   /** Hide entirely when model accepts no reference files (e.g. z-image). Still show when limit is unknown. */
   const showReferenceSection =
@@ -331,12 +429,28 @@ export function KubeezGenerateImageDialog({
       (uiModel?.durationOptions?.length ?? 0) > 0
   );
 
-  const videoSubmitBlocked = Boolean(
-    isVideoModel &&
-      uiModel?.supportsImageToVideo &&
-      !uiModel?.supportsTextToVideo &&
-      referenceAttachments.length === 0
-  );
+  const referenceRequirementBlocked = useMemo(() => {
+    if (isMusicModel || isSpeechModel || !uiModel) return false;
+    return !referenceAttachmentsMeetMinimum({
+      resolvedModelId: mediaGenModelIdForDialog,
+      baseCardId: resolvedSelection.baseCardId,
+      settings: effectiveSettings,
+      uiModel,
+      attachments: effectiveReferenceAttachments,
+      maxReferenceFiles: referenceFileLimit,
+    });
+  }, [
+    isMusicModel,
+    isSpeechModel,
+    uiModel,
+    mediaGenModelIdForDialog,
+    resolvedSelection.baseCardId,
+    effectiveSettings,
+    effectiveReferenceAttachments,
+    referenceFileLimit,
+  ]);
+
+  const isMotionControlUi = isKlingMotionControlModelId(mediaGenModelIdForDialog);
 
   const videoFooterHint = useMemo(() => {
     const m = uiModel;
@@ -394,7 +508,7 @@ export function KubeezGenerateImageDialog({
       return;
     }
     const ui = getVideoAspectUi(resolvedModelId, {
-      veoMode: resolvedSelection.settings.veo31?.mode,
+      veoMode: effectiveSettings.veo31?.mode,
     });
     if (!ui) {
       setVideoAspectRatio(undefined);
@@ -409,7 +523,7 @@ export function KubeezGenerateImageDialog({
       if (prev === undefined || !allowed.has(prev)) return ui.defaultValue;
       return prev;
     });
-  }, [isVideoModel, resolvedModelId, resolvedSelection.settings.veo31?.mode]);
+  }, [isVideoModel, resolvedModelId, effectiveSettings.veo31?.mode]);
 
   useEffect(() => {
     if (referenceFileLimit !== 0) return;
@@ -425,6 +539,9 @@ export function KubeezGenerateImageDialog({
   useEffect(() => {
     if (!open) {
       setIsStartingJob(false);
+      setReferenceLibraryPickerOpen(false);
+      setMotionImageLibraryPickerOpen(false);
+      setMotionVideoLibraryPickerOpen(false);
       setReferenceAttachments((prev) => {
         for (const r of prev) {
           if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
@@ -449,7 +566,6 @@ export function KubeezGenerateImageDialog({
         ];
         return flat.some((m) => m.model_id === prev) ? prev : DEFAULT_MODEL_ID;
       });
-      setModelsHint(null);
       setModelsLoading(false);
       return;
     }
@@ -458,7 +574,6 @@ export function KubeezGenerateImageDialog({
     let cancelled = false;
 
     setModelsLoading(true);
-    setModelsHint(null);
 
     fetchKubeezGroupedMediaModels({
       apiKey,
@@ -470,31 +585,6 @@ export function KubeezGenerateImageDialog({
         setImageModels(result.imageModels);
         setVideoModels(result.videoModels);
         setMusicModels(result.musicModels);
-
-        const hints: string[] = [];
-        if (!result.imageFromApi && apiKey) {
-          hints.push('Image models: using built-in list (API empty or unavailable).');
-        }
-        if (result.catalogAugmentedFromCache) {
-          hints.push(
-            'Extra catalog rows were merged from your last saved Kubeez sync (live API wins when both exist).'
-          );
-        }
-        if (result.videoSource === 'failed') {
-          hints.push('Video models could not be loaded.');
-        } else if (result.videoSource === 'empty') {
-          hints.push('No video models returned from the API.');
-        } else if (result.videoSource === 'cached') {
-          hints.push(
-            'Video: using saved catalog from your last successful sync (live list was empty or unavailable).'
-          );
-        }
-        if (result.musicSource === 'failed') {
-          hints.push('Music: API error — using built-in engine ids (V5, V4…).');
-        } else if (result.musicSource === 'fallback') {
-          hints.push('Music: API returned no models — using built-in engine ids.');
-        }
-        setModelsHint(hints.length > 0 ? hints.join(' ') : null);
 
         setMusicInstrumental(false);
         setDialogueVoice(KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID);
@@ -528,7 +618,6 @@ export function KubeezGenerateImageDialog({
         setImageModels([...KUBEEZ_OFFLINE_BROWSE.imageModels]);
         setVideoModels([...KUBEEZ_OFFLINE_BROWSE.videoModels]);
         setMusicModels([...KUBEEZ_OFFLINE_BROWSE.musicModels]);
-        setModelsHint('Could not reach Kubeez. Showing the offline catalog; try again when you are online.');
         setSelectedModelId((prev) => {
           const flat = [
             ...KUBEEZ_OFFLINE_BROWSE.imageModels,
@@ -590,6 +679,7 @@ export function KubeezGenerateImageDialog({
       videoModels,
       musicModels
     );
+    const submitSettings: KubeezModelSettings = { ...resolved.settings, ...dialogModelSettings };
     let variants = getVariantsForBaseCardId(
       resolved.baseCardId,
       imageModels,
@@ -603,21 +693,32 @@ export function KubeezGenerateImageDialog({
       ? modelId
       : resolveGenerationModelId({
           baseCardId: resolved.baseCardId,
-          settings: resolved.settings,
+          settings: submitSettings,
           variants,
         });
 
-    if (videoSubmitBlocked) {
-      toast.error('This video model needs reference media. Upload an image or video first.');
-      return;
+    if (!isMusic && !isSpeech && uiModel) {
+      if (
+        !referenceAttachmentsMeetMinimum({
+          resolvedModelId: mediaGenModelId,
+          baseCardId: resolved.baseCardId,
+          settings: submitSettings,
+          uiModel,
+          attachments: effectiveReferenceAttachments,
+          maxReferenceFiles: referenceFileLimit,
+        })
+      ) {
+        toast.error('Add the required reference files for this model before generating.');
+        return;
+      }
     }
 
     if (!isMusic && !isSpeech && referenceFileLimit !== undefined) {
-      if (referenceFileLimit === 0 && referenceAttachments.length > 0) {
+      if (referenceFileLimit === 0 && effectiveReferenceAttachments.length > 0) {
         toast.error('This model does not accept reference files.');
         return;
       }
-      if (referenceFileLimit > 0 && referenceAttachments.length > referenceFileLimit) {
+      if (referenceFileLimit > 0 && effectiveReferenceAttachments.length > referenceFileLimit) {
         toast.error(
           `This model allows at most ${referenceFileLimit} reference file(s). Remove extras and try again.`
         );
@@ -656,7 +757,7 @@ export function KubeezGenerateImageDialog({
     const baseUrl = kubeezApiBaseUrl?.trim() || undefined;
 
     const videoAspectUi = isVideo
-      ? getVideoAspectUi(mediaGenModelId, { veoMode: resolved.settings.veo31?.mode })
+      ? getVideoAspectUi(mediaGenModelId, { veoMode: submitSettings.veo31?.mode })
       : null;
     const includeAspectRatioForVideo = shouldIncludeVideoAspectRatio(videoAspectUi, videoAspectRatio);
     const aspectRatioForMedia = isVideo
@@ -736,7 +837,11 @@ export function KubeezGenerateImageDialog({
             includeAspectRatio: isVideo
               ? includeAspectRatioForVideo
               : uiModel.showAspectRatio !== false,
-            referenceFiles: referenceAttachments.map((r) => r.file),
+            referenceFiles: effectiveReferenceAttachments.map((r) => r.file),
+            quality:
+              mediaGenModelId === 'p-image-edit' && (submitSettings.pImageEditTurbo ?? true)
+                ? 'turbo'
+                : undefined,
           },
           timelinePlacement,
           playheadFrame,
@@ -754,6 +859,14 @@ export function KubeezGenerateImageDialog({
           if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
         }
         return [];
+      });
+      setMotionRefImage((p) => {
+        if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        return null;
+      });
+      setMotionRefVideo((p) => {
+        if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        return null;
       });
     } finally {
       setIsStartingJob(false);
@@ -774,7 +887,7 @@ export function KubeezGenerateImageDialog({
     musicInstrumental,
     musicModels,
     onOpenChange,
-    referenceAttachments,
+    effectiveReferenceAttachments,
     referenceFileLimit,
     uiModel,
     selectedModelId,
@@ -782,10 +895,15 @@ export function KubeezGenerateImageDialog({
     timelinePlacement,
     videoDuration,
     videoModels,
-    videoSubmitBlocked,
+    referenceRequirementBlocked,
+    dialogModelSettings,
   ]);
 
   const addReferenceFiles = useCallback((fileList: FileList | File[]) => {
+    if (isKlingMotionControlModelId(mediaGenModelIdForDialog)) {
+      toast.message('Use Ref image and Ref video for this model.');
+      return;
+    }
     const raw = Array.from(fileList);
     const mid = resolvedSelection.resolvedModelId;
     const allowed = raw.filter(
@@ -837,7 +955,77 @@ export function KubeezGenerateImageDialog({
       }));
       return [...prev, ...added];
     });
-  }, [referenceFileLimit, resolvedSelection.resolvedModelId]);
+  }, [referenceFileLimit, resolvedSelection.resolvedModelId, mediaGenModelIdForDialog]);
+
+  const removeMotionRefImage = useCallback(() => {
+    setMotionRefImage((p) => {
+      if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
+      return null;
+    });
+  }, []);
+
+  const removeMotionRefVideo = useCallback(() => {
+    setMotionRefVideo((p) => {
+      if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl);
+      return null;
+    });
+  }, []);
+
+  const addMotionRefImage = useCallback(
+    (fileList: FileList | File[]) => {
+      const file = Array.from(fileList)[0];
+      if (!file) return;
+      const mid = mediaGenModelIdForDialog;
+      if (!file.type.startsWith('image/') || !isKubeezReferenceMimeAllowed(file)) {
+        toast.error('Choose a reference image (JPEG, PNG, or WebP).');
+        return;
+      }
+      if (!isKubeezReferenceFileSizeAllowedForModel(file, mid)) {
+        const capBytes = Math.min(getMaxFileSizeForModel(mid, file.type), MAX_INPUT_FILE_SIZE);
+        toast.error('Image is too large for this model.', {
+          description: `Max ${getFileSizeInMB(capBytes)} MB per file (Kubeez web limits).`,
+        });
+        return;
+      }
+      setMotionRefImage((prev) => {
+        if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+        return {
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: URL.createObjectURL(file),
+        };
+      });
+    },
+    [mediaGenModelIdForDialog]
+  );
+
+  const addMotionRefVideo = useCallback(
+    (fileList: FileList | File[]) => {
+      const file = Array.from(fileList)[0];
+      if (!file) return;
+      const mid = mediaGenModelIdForDialog;
+      if (!file.type.startsWith('video/') || !isKubeezReferenceMimeAllowed(file)) {
+        toast.error('Choose a reference video (MP4, QuickTime, or Matroska).');
+        return;
+      }
+      if (!isKubeezReferenceFileSizeAllowedForModel(file, mid)) {
+        const capBytes = Math.min(getMaxFileSizeForModel(mid, file.type), MAX_INPUT_FILE_SIZE);
+        toast.error('Video is too large for this model.', {
+          description: `Max ${getFileSizeInMB(capBytes)} MB per file (Kubeez web limits).`,
+        });
+        return;
+      }
+      setMotionRefVideo((prev) => {
+        if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+        return {
+          id: crypto.randomUUID(),
+          file,
+          previewUrl: null,
+        };
+      });
+    },
+    [mediaGenModelIdForDialog]
+  );
 
   const removeReferenceAttachment = useCallback((id: string) => {
     setReferenceAttachments((prev) => {
@@ -846,6 +1034,100 @@ export function KubeezGenerateImageDialog({
       return prev.filter((r) => r.id !== id);
     });
   }, []);
+
+  const libraryMediaToReferenceFile = useCallback((meta: MediaMetadata, blob: Blob): File => {
+    if (blob instanceof File) return blob;
+    return new File([blob], meta.fileName, { type: meta.mimeType });
+  }, []);
+
+  const addReferenceFromLibrary = useCallback(
+    async (mediaId: string) => {
+      const meta = useMediaLibraryStore.getState().mediaItems.find((m) => m.id === mediaId);
+      if (!meta) {
+        toast.error('That media item is no longer in the library.');
+        return;
+      }
+      try {
+        const blob = await mediaLibraryService.getMediaFile(mediaId);
+        if (!blob) {
+          toast.error('Could not read the file from the library.');
+          return;
+        }
+        const file = libraryMediaToReferenceFile(meta, blob);
+        addReferenceFiles([file]);
+      } catch (e) {
+        if (e instanceof FileAccessError) {
+          toast.error(e.message);
+          return;
+        }
+        logger.error('Reference from library failed', e);
+        toast.error('Could not load media from the library.');
+      }
+    },
+    [addReferenceFiles, libraryMediaToReferenceFile]
+  );
+
+  const addMotionRefImageFromLibrary = useCallback(
+    async (mediaId: string) => {
+      const meta = useMediaLibraryStore.getState().mediaItems.find((m) => m.id === mediaId);
+      if (!meta) {
+        toast.error('That media item is no longer in the library.');
+        return;
+      }
+      if (!meta.mimeType.startsWith('image/')) {
+        toast.error('Choose an image from the library.');
+        return;
+      }
+      try {
+        const blob = await mediaLibraryService.getMediaFile(mediaId);
+        if (!blob) {
+          toast.error('Could not read the file from the library.');
+          return;
+        }
+        const file = libraryMediaToReferenceFile(meta, blob);
+        addMotionRefImage([file]);
+      } catch (e) {
+        if (e instanceof FileAccessError) {
+          toast.error(e.message);
+          return;
+        }
+        logger.error('Motion reference image from library failed', e);
+        toast.error('Could not load media from the library.');
+      }
+    },
+    [addMotionRefImage, libraryMediaToReferenceFile]
+  );
+
+  const addMotionRefVideoFromLibrary = useCallback(
+    async (mediaId: string) => {
+      const meta = useMediaLibraryStore.getState().mediaItems.find((m) => m.id === mediaId);
+      if (!meta) {
+        toast.error('That media item is no longer in the library.');
+        return;
+      }
+      if (!meta.mimeType.startsWith('video/')) {
+        toast.error('Choose a video from the library.');
+        return;
+      }
+      try {
+        const blob = await mediaLibraryService.getMediaFile(mediaId);
+        if (!blob) {
+          toast.error('Could not read the file from the library.');
+          return;
+        }
+        const file = libraryMediaToReferenceFile(meta, blob);
+        addMotionRefVideo([file]);
+      } catch (e) {
+        if (e instanceof FileAccessError) {
+          toast.error(e.message);
+          return;
+        }
+        logger.error('Motion reference video from library failed', e);
+        toast.error('Could not load media from the library.');
+      }
+    },
+    [addMotionRefVideo, libraryMediaToReferenceFile]
+  );
 
   const missingKey = !kubeezApiKey?.trim();
   const libraryOnly = !timelinePlacement;
@@ -862,7 +1144,22 @@ export function KubeezGenerateImageDialog({
         ? 'Upload reference frame(s) or clip for image-to-video when required by the model.'
         : 'Optional for image models — sent as source_media_urls for image-to-image/editing.';
 
+  const canPickReferenceFromLibrary =
+    !isStartingJob &&
+    !missingKey &&
+    referenceFileLimit !== undefined &&
+    referenceFileLimit > 0 &&
+    referenceAttachments.length < referenceFileLimit;
+
+  const motionRefLibraryDisabled = isStartingJob || missingKey;
+
+  const libraryFilterKubeezReference = useCallback(
+    (m: MediaMetadata) => isKubeezReferenceMimeTypeStringAllowed(m.mimeType),
+    []
+  );
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="duration-300 ease-out motion-reduce:duration-100"
@@ -906,7 +1203,6 @@ export function KubeezGenerateImageDialog({
         <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden px-4 py-3 sm:px-5 lg:flex-row">
           <KubeezGenerateModelsColumn
             missingKey={missingKey}
-            modelsHint={modelsHint}
             imageModels={imageModels}
             videoModels={videoModels}
             musicModels={musicModels}
@@ -926,7 +1222,7 @@ export function KubeezGenerateImageDialog({
               selectedModelId={selectedModelId}
               resolvedModelId={resolvedSelection.resolvedModelId}
               onSelectModelId={setSelectedModelId}
-              modelSettings={resolvedSelection.settings}
+              modelSettings={effectiveSettings}
               onPatchModelSettings={patchModelSettings}
               videoAspectRatio={videoAspectRatio}
               onVideoAspectRatioChange={setVideoAspectRatio}
@@ -1014,127 +1310,348 @@ export function KubeezGenerateImageDialog({
               </div>
             )}
 
-            {showReferenceSection && (
-            <div className="shrink-0 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label className="text-foreground/90">{referenceLabel}</Label>
-                <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {referenceFileLimit === undefined
-                    ? '—'
-                    : `${referenceAttachments.length}/${referenceFileLimit}`}
-                </span>
-              </div>
-              <p className="text-[11px] leading-snug text-muted-foreground">{referenceHelperText}</p>
-              <input
-                ref={referenceFileInputRef}
-                type="file"
-                className="sr-only"
-                accept={KUBEEZ_REFERENCE_FILE_ACCEPT}
-                multiple
-                disabled={
-                  isStartingJob ||
-                  missingKey ||
-                  referenceFileLimit === undefined ||
-                  (referenceFileLimit > 0 && referenceAttachments.length >= referenceFileLimit)
-                }
-                onChange={(e) => {
-                  const list = e.target.files;
-                  if (list?.length) addReferenceFiles(list);
-                  e.target.value = '';
-                }}
-              />
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (isStartingJob || missingKey || referenceFileLimit === undefined) return;
-                  const files = e.dataTransfer.files;
-                  if (files?.length) addReferenceFiles(files);
-                }}
-                className={cn(
-                  'rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3 transition-colors',
-                  'hover:border-border hover:bg-muted/25',
-                  (isStartingJob || missingKey || referenceFileLimit === undefined) &&
-                    'pointer-events-none opacity-50'
-                )}
-              >
-                {referenceAttachments.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <Paperclip className="h-5 w-5 text-muted-foreground" aria-hidden />
-                    <p className="text-xs text-muted-foreground">
-                      Drop files here or{' '}
-                      <button
-                        type="button"
-                        className="font-medium text-primary underline-offset-2 hover:underline"
-                        disabled={
-                          isStartingJob || missingKey || referenceFileLimit === undefined
-                        }
-                        onClick={() => referenceFileInputRef.current?.click()}
-                      >
-                        browse
-                      </button>
-                    </p>
+            {showReferenceSection &&
+              (isMotionControlUi ? (
+                <div className="shrink-0 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label className="text-foreground/90">Motion references</Label>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {referenceFileLimit === undefined
+                        ? '—'
+                        : `${effectiveReferenceAttachments.length}/${referenceFileLimit}`}
+                    </span>
                   </div>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {referenceAttachments.map((r) => (
-                      <li
-                        key={r.id}
-                        className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 py-1.5 pl-1.5 pr-2"
-                      >
-                        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-muted">
-                          {r.previewUrl ? (
-                            <img src={r.previewUrl} alt="" className="h-full w-full object-cover" />
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 sm:gap-4">
+                      <div className="min-w-0 space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-foreground/90">
+                          Ref image
+                        </p>
+                        <input
+                          ref={motionImageInputRef}
+                          type="file"
+                          className="sr-only"
+                          accept={MOTION_IMAGE_ACCEPT}
+                          disabled={isStartingJob || missingKey}
+                          onChange={(e) => {
+                            const list = e.target.files;
+                            if (list?.length) addMotionRefImage(list);
+                            e.target.value = '';
+                          }}
+                        />
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (isStartingJob || missingKey) return;
+                            const files = e.dataTransfer.files;
+                            if (files?.length) addMotionRefImage(files);
+                          }}
+                          className={cn(
+                            'rounded-xl border border-dashed border-border/80 bg-muted/15 px-2 py-3 transition-colors',
+                            'hover:border-foreground/20 hover:bg-muted/25',
+                            (isStartingJob || missingKey) && 'pointer-events-none opacity-50'
+                          )}
+                        >
+                          {!motionRefImage ? (
+                            <button
+                              type="button"
+                              className="flex min-h-[7.5rem] w-full flex-col items-center justify-center gap-2 text-center"
+                              disabled={isStartingJob || missingKey}
+                              onClick={() => motionImageInputRef.current?.click()}
+                            >
+                              <ImageIcon className="h-6 w-6 text-muted-foreground" aria-hidden />
+                              <span className="text-xs text-muted-foreground">Add image</span>
+                            </button>
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                              <Film className="h-5 w-5" aria-hidden />
+                            <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 py-1.5 pl-1.5 pr-2">
+                              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
+                                {motionRefImage.previewUrl ? (
+                                  <img
+                                    src={motionRefImage.previewUrl}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                    <ImageIcon className="h-5 w-5" aria-hidden />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium text-foreground">
+                                  {motionRefImage.file.name}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {(motionRefImage.file.size / 1024).toFixed(0)} KB
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                                disabled={isStartingJob}
+                                onClick={removeMotionRefImage}
+                                aria-label={`Remove ${motionRefImage.file.name}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
                             </div>
                           )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-foreground">{r.file.name}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {(r.file.size / 1024).toFixed(0)} KB
-                            {r.file.type ? ` · ${r.file.type}` : ''}
-                          </p>
                         </div>
                         <Button
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-                          disabled={isStartingJob}
-                          onClick={() => removeReferenceAttachment(r.id)}
-                          aria-label={`Remove ${r.file.name}`}
+                          size="sm"
+                          className="h-7 w-full text-xs text-primary hover:text-primary"
+                          disabled={motionRefLibraryDisabled}
+                          onClick={() => setMotionImageLibraryPickerOpen(true)}
                         >
-                          <X className="h-4 w-4" />
+                          From library
                         </Button>
-                      </li>
-                    ))}
-                    {referenceFileLimit != null &&
-                      referenceFileLimit > 0 &&
-                      referenceAttachments.length < referenceFileLimit && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-full border-dashed"
-                        disabled={isStartingJob || missingKey}
-                        onClick={() => referenceFileInputRef.current?.click()}
-                      >
-                        <Paperclip className="mr-1.5 h-3.5 w-3.5" />
-                        Add more
-                      </Button>
+                      </div>
+                      <div className="min-w-0 space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-foreground/90">
+                          Ref video
+                        </p>
+                        <input
+                          ref={motionVideoInputRef}
+                          type="file"
+                          className="sr-only"
+                          accept={MOTION_VIDEO_ACCEPT}
+                          disabled={isStartingJob || missingKey}
+                          onChange={(e) => {
+                            const list = e.target.files;
+                            if (list?.length) addMotionRefVideo(list);
+                            e.target.value = '';
+                          }}
+                        />
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (isStartingJob || missingKey) return;
+                            const files = e.dataTransfer.files;
+                            if (files?.length) addMotionRefVideo(files);
+                          }}
+                          className={cn(
+                            'rounded-xl border border-dashed border-border/80 bg-muted/15 px-2 py-3 transition-colors',
+                            'hover:border-foreground/20 hover:bg-muted/25',
+                            (isStartingJob || missingKey) && 'pointer-events-none opacity-50'
+                          )}
+                        >
+                          {!motionRefVideo ? (
+                            <button
+                              type="button"
+                              className="flex min-h-[7.5rem] w-full flex-col items-center justify-center gap-2 text-center"
+                              disabled={isStartingJob || missingKey}
+                              onClick={() => motionVideoInputRef.current?.click()}
+                            >
+                              <Video className="h-6 w-6 text-muted-foreground" aria-hidden />
+                              <span className="text-xs text-muted-foreground">Add video</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 py-1.5 pl-1.5 pr-2">
+                              <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                                <Film className="h-6 w-6 text-muted-foreground" aria-hidden />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs font-medium text-foreground">
+                                  {motionRefVideo.file.name}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {(motionRefVideo.file.size / 1024).toFixed(0)} KB
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                                disabled={isStartingJob}
+                                onClick={removeMotionRefVideo}
+                                aria-label={`Remove ${motionRefVideo.file.name}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-full text-xs text-primary hover:text-primary"
+                          disabled={motionRefLibraryDisabled}
+                          onClick={() => setMotionVideoLibraryPickerOpen(true)}
+                        >
+                          From library
+                        </Button>
+                      </div>
+                    </div>
+                    {typeof uiModel?.cost_per_generation === 'number' && (
+                      <div className="shrink-0 self-center rounded-full border border-border/70 bg-muted/35 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span className="text-sm font-bold leading-none text-foreground tabular-nums">
+                          {uiModel.cost_per_generation}
+                        </span>{' '}
+                        credits/sec
+                      </div>
                     )}
-                  </ul>
-                )}
-              </div>
-            </div>
-            )}
+                  </div>
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    Add a still to match and a source clip for movement. Both are required before Generate
+                    (sent as image then video).
+                  </p>
+                </div>
+              ) : (
+                <div className="shrink-0 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label className="text-foreground/90">{referenceLabel}</Label>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {referenceFileLimit === undefined
+                        ? '—'
+                        : `${effectiveReferenceAttachments.length}/${referenceFileLimit}`}
+                    </span>
+                  </div>
+                  <p className="text-[11px] leading-snug text-muted-foreground">{referenceHelperText}</p>
+                  <input
+                    ref={referenceFileInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept={KUBEEZ_REFERENCE_FILE_ACCEPT}
+                    multiple
+                    disabled={
+                      isStartingJob ||
+                      missingKey ||
+                      referenceFileLimit === undefined ||
+                      (referenceFileLimit > 0 && referenceAttachments.length >= referenceFileLimit)
+                    }
+                    onChange={(e) => {
+                      const list = e.target.files;
+                      if (list?.length) addReferenceFiles(list);
+                      e.target.value = '';
+                    }}
+                  />
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (isStartingJob || missingKey || referenceFileLimit === undefined) return;
+                      const files = e.dataTransfer.files;
+                      if (files?.length) addReferenceFiles(files);
+                    }}
+                    className={cn(
+                      'rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3 transition-colors',
+                      'hover:border-border hover:bg-muted/25',
+                      (isStartingJob || missingKey || referenceFileLimit === undefined) &&
+                        'pointer-events-none opacity-50'
+                    )}
+                  >
+                    {referenceAttachments.length === 0 ? (
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <Paperclip className="h-5 w-5 text-muted-foreground" aria-hidden />
+                        <p className="text-xs text-muted-foreground">
+                          Drop files here,{' '}
+                          <button
+                            type="button"
+                            className="font-medium text-primary underline-offset-2 hover:underline"
+                            disabled={isStartingJob || missingKey || referenceFileLimit === undefined}
+                            onClick={() => referenceFileInputRef.current?.click()}
+                          >
+                            browse
+                          </button>
+                          , or{' '}
+                          <button
+                            type="button"
+                            className="font-medium text-primary underline-offset-2 hover:underline"
+                            disabled={!canPickReferenceFromLibrary}
+                            onClick={() => setReferenceLibraryPickerOpen(true)}
+                          >
+                            pick from library
+                          </button>
+                        </p>
+                      </div>
+                    ) : (
+                      <ul className="flex flex-col gap-2">
+                        {referenceAttachments.map((r) => (
+                          <li
+                            key={r.id}
+                            className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 py-1.5 pl-1.5 pr-2"
+                          >
+                            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md bg-muted">
+                              {r.previewUrl ? (
+                                <img src={r.previewUrl} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                  <Film className="h-5 w-5" aria-hidden />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-foreground">{r.file.name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {(r.file.size / 1024).toFixed(0)} KB
+                                {r.file.type ? ` · ${r.file.type}` : ''}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                              disabled={isStartingJob}
+                              onClick={() => removeReferenceAttachment(r.id)}
+                              aria-label={`Remove ${r.file.name}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </li>
+                        ))}
+                        {referenceFileLimit != null &&
+                          referenceFileLimit > 0 &&
+                          referenceAttachments.length < referenceFileLimit && (
+                            <div className="flex flex-col gap-1.5 sm:flex-row">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 flex-1 border-dashed"
+                                disabled={isStartingJob || missingKey}
+                                onClick={() => referenceFileInputRef.current?.click()}
+                              >
+                                <Paperclip className="mr-1.5 h-3.5 w-3.5" />
+                                Add more
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 flex-1 border-dashed"
+                                disabled={!canPickReferenceFromLibrary}
+                                onClick={() => setReferenceLibraryPickerOpen(true)}
+                              >
+                                From library
+                              </Button>
+                            </div>
+                          )}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              ))}
 
             {showDurationControl && uiModel?.durationOptions && (
               <div className="shrink-0 space-y-2">
@@ -1178,7 +1695,7 @@ export function KubeezGenerateImageDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isStartingJob}>
             Cancel
           </Button>
-          <Button type="button" onClick={() => void handleSubmit()} disabled={isStartingJob || missingKey || videoSubmitBlocked}>
+          <Button type="button" onClick={() => void handleSubmit()} disabled={isStartingJob || missingKey || referenceRequirementBlocked}>
             {isStartingJob
               ? 'Starting…'
               : libraryOnly
@@ -1188,5 +1705,39 @@ export function KubeezGenerateImageDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <MediaPickerDialog
+      open={referenceLibraryPickerOpen}
+      onClose={() => setReferenceLibraryPickerOpen(false)}
+      onSelect={(id) => {
+        void addReferenceFromLibrary(id);
+      }}
+      filterItem={libraryFilterKubeezReference}
+      title="Reference from library"
+      description="Choose an image or video already in this project's media library."
+    />
+    <MediaPickerDialog
+      open={motionImageLibraryPickerOpen}
+      onClose={() => setMotionImageLibraryPickerOpen(false)}
+      onSelect={(id) => {
+        void addMotionRefImageFromLibrary(id);
+      }}
+      filterType="image"
+      filterItem={libraryFilterKubeezReference}
+      title="Reference image from library"
+      description="Choose a still image from your library for motion control."
+    />
+    <MediaPickerDialog
+      open={motionVideoLibraryPickerOpen}
+      onClose={() => setMotionVideoLibraryPickerOpen(false)}
+      onSelect={(id) => {
+        void addMotionRefVideoFromLibrary(id);
+      }}
+      filterType="video"
+      filterItem={libraryFilterKubeezReference}
+      title="Reference video from library"
+      description="Choose a video clip from your library for motion control."
+    />
+    </>
   );
 }

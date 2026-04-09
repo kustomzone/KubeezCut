@@ -41,14 +41,18 @@ export const KUBEEZ_REFERENCE_MAX_INPUT_FILE_SIZE_BYTES = MAX_INPUT_FILE_SIZE;
 export const KUBEEZ_REFERENCE_FILE_ACCEPT =
   `${[...KUBEEZ_ACCEPTED_REFERENCE_IMAGE_TYPES, ...KUBEEZ_ACCEPTED_REFERENCE_VIDEO_TYPES].join(',')},audio/*`;
 
-export function isKubeezReferenceMimeAllowed(file: File): boolean {
-  const t = file.type.trim();
+export function isKubeezReferenceMimeTypeStringAllowed(mimeType: string): boolean {
+  const t = mimeType.trim();
   if (!t) return true;
   if (t.startsWith('audio/')) return true;
   return (
     (KUBEEZ_ACCEPTED_REFERENCE_IMAGE_TYPES as readonly string[]).includes(t) ||
     (KUBEEZ_ACCEPTED_REFERENCE_VIDEO_TYPES as readonly string[]).includes(t)
   );
+}
+
+export function isKubeezReferenceMimeAllowed(file: File): boolean {
+  return isKubeezReferenceMimeTypeStringAllowed(file.type);
 }
 
 /**

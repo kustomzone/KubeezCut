@@ -261,6 +261,8 @@ export type KubeezModelSettings = {
   wan25?: KubeezWan25Settings;
   sunoEngine?: KubeezMusicEngine;
   sunoTool?: KubeezMusicToolKind;
+  /** P Image Edit: when true (default), maps to `quality: 'turbo'` on POST /v1/generate/media */
+  pImageEditTurbo?: boolean;
 };
 
 const KLING26_VARIANT_RE =

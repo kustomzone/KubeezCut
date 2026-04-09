@@ -99,7 +99,19 @@ export const useMediaLibraryStore = create<
           proxyService.clearProxyKey(mediaId);
         }
 
-        // Clear items and set loading state immediately to prevent flash
+        const { unsupportedCodecResolver } = get();
+        if (unsupportedCodecResolver) {
+          unsupportedCodecResolver(false);
+        }
+
+        if (notificationTimeoutId !== null) {
+          clearTimeout(notificationTimeoutId);
+          notificationTimeoutId = null;
+        }
+
+        // Clear items and set loading state immediately to prevent flash.
+        // Reset project-scoped UI/error state (broken media, orphaned clips, dialogs)
+        // so a new project never inherits the previous project's warnings.
         set({
           currentProjectId: projectId,
           mediaItems: [],
@@ -107,11 +119,23 @@ export const useMediaLibraryStore = create<
           selectedMediaIds: [],
           selectedCompositionIds: [],
           isLoading: !!projectId, // Set loading if switching to a project
+          importingIds: [],
+          error: null,
+          errorLink: null,
+          notification: null,
           proxyStatus: new Map(),
           proxyProgress: new Map(),
           transcriptStatus: new Map(),
           transcriptProgress: new Map(),
           kubeezPendingGenerations: [],
+          brokenMediaIds: [],
+          brokenMediaInfo: new Map(),
+          showMissingMediaDialog: false,
+          orphanedClips: [],
+          showOrphanedClipsDialog: false,
+          unsupportedCodecFiles: [],
+          showUnsupportedCodecDialog: false,
+          unsupportedCodecResolver: null,
         });
         // Note: loadMediaItems is triggered by the component's useEffect
         // Don't call it here to avoid double loading

@@ -33,6 +33,8 @@ export type KubeezGenerateJobSnapshot = {
     videoDuration: string | undefined;
     includeAspectRatio: boolean;
     referenceFiles: File[];
+    /** POST /v1/generate/media `quality` when applicable (e.g. P Image Edit turbo). */
+    quality?: string;
   };
   timelinePlacement?: { trackId: string };
   playheadFrame: number;
@@ -224,6 +226,7 @@ export async function runKubeezGenerateJobInBackground(
           ? iv.videoDuration
           : undefined,
       preferVideoOutput: iv.isVideo,
+      ...(iv.quality !== undefined && iv.quality !== '' ? { quality: iv.quality } : {}),
       ...(hasSources ? { sourceMediaUrls } : {}),
     });
 
@@ -270,10 +273,7 @@ export async function runKubeezGenerateJobInBackground(
     }
     const message = e instanceof Error ? e.message : 'Generation failed';
     logger.error('Kubeez generate failed', e);
-    useMediaLibraryStore.getState().patchKubeezPendingGeneration(jobId, {
-      status: 'error',
-      errorMessage: message,
-    });
+    dismissPending();
     toast.error(message);
   }
 }

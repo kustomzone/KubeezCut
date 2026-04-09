@@ -94,6 +94,19 @@ function getGhostHighlightClasses(ghostPreviews: GhostPreviewItem[]): string {
   return 'border-primary/50 bg-primary/10';
 }
 
+function ghostPreviewPillClassName(type: GhostPreviewItem['type']): string {
+  const base =
+    'absolute inset-y-0 rounded border-2 border-dashed pointer-events-none z-20 flex items-center px-2';
+  if (type === 'composition') return `${base} border-violet-400 bg-violet-600/20`;
+  if (type === 'external-file') return `${base} border-primary bg-primary/15`;
+  if (type === 'video') return `${base} border-timeline-video bg-timeline-video/20`;
+  if (type === 'audio') return `${base} border-timeline-audio bg-timeline-audio/20`;
+  if (type === 'text') return `${base} border-timeline-text bg-timeline-text/20`;
+  if (type === 'shape') return `${base} border-timeline-shape bg-timeline-shape/20`;
+  if (type === 'adjustment') return `${base} border-slate-400 bg-slate-400/15`;
+  return `${base} border-timeline-image bg-timeline-image/20`;
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -175,6 +188,14 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
     () => allGhostPreviews.filter((ghost) => ghost.targetTrackId === track.id),
     [allGhostPreviews, track.id]
   );
+  const previewBelowGhosts = useMemo(
+    () => allGhostPreviews.filter((ghost) => ghost.previewBelowTrackId === track.id),
+    [allGhostPreviews, track.id]
+  );
+  /** Drop lands on another lane (e.g. audio planned below while pointer is over V1) — avoid video lane “empty” highlight. */
+  const activeGhostsTargetOnlyOtherTracks =
+    allGhostPreviews.length > 0 &&
+    allGhostPreviews.every((ghost) => ghost.targetTrackId !== track.id);
   const ghostHighlightClasses = useMemo(
     () => getGhostHighlightClasses(ghostPreviews),
     [ghostPreviews]
@@ -214,9 +235,12 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
       dropTargetTrackId: track.id,
     });
 
+    const store = useTimelineStore.getState();
     return buildGhostPreviewsFromTrackMediaDropPlan({
       plannedItems,
       frameToPixels,
+      existingTrackIds: new Set(store.tracks.map((t) => t.id)),
+      dropTargetTrackId: track.id,
     });
   }, [fps, frameToPixels, track.id]);
 
@@ -513,6 +537,8 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
         ...buildGhostPreviewsFromTrackMediaDropPlan({
           plannedItems: [plannedItem],
           frameToPixels,
+          existingTrackIds: new Set(store.tracks.map((t) => t.id)),
+          dropTargetTrackId: track.id,
         }).map((preview) => ({
           ...preview,
           label: data.name,
@@ -619,6 +645,12 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
   };
 
   return (
+    <div
+      className="flex min-w-0 flex-col"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
     <ContextMenu key={menuKey} modal={false}>
       <ContextMenuTrigger asChild disabled={track.locked}>
         <div
@@ -633,13 +665,15 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
             // Elevate track above others when it contains a dragging clip
             zIndex: hasItemBeingDragged ? 100 : undefined,
           }}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
           onMouseDown={handleMouseDown}
           onContextMenu={handleContextMenu}
         >
-          {isDragOver && !isDropDisabled && !isExternalDragOver && ghostPreviews.length === 0 && (
+          {isDragOver &&
+            !isDropDisabled &&
+            !isExternalDragOver &&
+            ghostPreviews.length === 0 &&
+            previewBelowGhosts.length === 0 &&
+            !activeGhostsTargetOnlyOtherTracks && (
             <div className="absolute inset-0 pointer-events-none z-10 rounded border border-dashed border-primary/50 bg-primary/10" />
           )}
 
@@ -651,23 +685,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
           {!isDropDisabled && ghostPreviews.map((ghost, index) => (
             <div
               key={index}
-              className={`absolute inset-y-0 rounded border-2 border-dashed pointer-events-none z-20 flex items-center px-2 ${
-                ghost.type === 'composition'
-                  ? 'border-violet-400 bg-violet-600/20'
-                  : ghost.type === 'external-file'
-                  ? 'border-primary bg-primary/15'
-                  : ghost.type === 'video'
-                  ? 'border-timeline-video bg-timeline-video/20'
-                  : ghost.type === 'audio'
-                  ? 'border-timeline-audio bg-timeline-audio/20'
-                  : ghost.type === 'text'
-                  ? 'border-timeline-text bg-timeline-text/20'
-                  : ghost.type === 'shape'
-                  ? 'border-timeline-shape bg-timeline-shape/20'
-                  : ghost.type === 'adjustment'
-                  ? 'border-slate-400 bg-slate-400/15'
-                  : 'border-timeline-image bg-timeline-image/20'
-                }`}
+              className={ghostPreviewPillClassName(ghost.type)}
               style={{
                 left: `${ghost.left}px`,
                 width: `${ghost.width}px`,
@@ -703,5 +721,31 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
         </ContextMenuContent>
       )}
     </ContextMenu>
+
+    {!isDropDisabled && previewBelowGhosts.length > 0 && (
+      <div
+        data-ephemeral-audio-lane
+        className="relative"
+        style={{
+          height: `${track.height}px`,
+          contain: 'layout style',
+        }}
+      >
+        <div className="pointer-events-none absolute inset-0 z-10 rounded border border-dashed border-timeline-audio/60 bg-timeline-audio/10" />
+        {previewBelowGhosts.map((ghost, index) => (
+          <div
+            key={`below-${index}`}
+            className={ghostPreviewPillClassName(ghost.type)}
+            style={{
+              left: `${ghost.left}px`,
+              width: `${ghost.width}px`,
+            }}
+          >
+            <span className="text-xs text-foreground/70 truncate">{ghost.label}</span>
+          </div>
+        ))}
+      </div>
+    )}
+    </div>
   );
 }, areTrackPropsEqual);

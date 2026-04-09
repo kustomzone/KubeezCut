@@ -2,6 +2,7 @@ import {
   KUBEEZ_API_PROXY_PATH_PREFIX,
   rewriteKubeezMediaCdnUrlForFetch,
 } from '@/infrastructure/kubeez/kubeez-cdn-fetch-url';
+import { readKubeezSseUntilResult } from '@/infrastructure/kubeez/kubeez-sse';
 import { extractKubeezPollStatus, isKubeezPlainObject } from '@/infrastructure/kubeez/kubeez-poll-status';
 import { createLogger } from '@/shared/logging/logger';
 
@@ -54,10 +55,15 @@ export function resolveKubeezApiBaseUrl(configured: string | undefined): string 
   return trimmed.replace(/\/$/, '');
 }
 
-const POLL_INTERVAL_MS = 2000;
+/** After the first immediate poll, use this interval while the job is likely still in flight. */
+const POLL_INTERVAL_FAST_MS = 1000;
+/** Back off for long-running generations to avoid hammering the API. */
+const POLL_INTERVAL_SLOW_MS = 2000;
+/** Switch to slow interval after this many completed poll attempts (still fast early). */
+const POLL_ATTEMPTS_BEFORE_SLOW_POLL = 25;
 const MAX_POLL_ATTEMPTS = 150;
 const MEDIA_DOWNLOAD_RETRIES = 10;
-const MEDIA_DOWNLOAD_RETRY_MS = 2000;
+const MEDIA_DOWNLOAD_RETRY_MS = 1000;
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -248,6 +254,77 @@ async function parseJsonResponse(res: Response): Promise<unknown> {
   }
 }
 
+/**
+ * After SSE `result` or terminal poll payload: resolve CDN/output URLs and download (with GET refresh on 404).
+ */
+async function finalizeMediaGenerationFromStatus(
+  statusBody: unknown,
+  ctx: {
+    root: string;
+    apiKey: string;
+    generationId: string;
+    preferVideoOutput: boolean;
+    signal?: AbortSignal;
+  }
+): Promise<Blob> {
+  const { root, apiKey, generationId, preferVideoOutput, signal } = ctx;
+
+  const status = extractKubeezPollStatus(statusBody);
+  if (status === 'failed' || status === 'error') {
+    throw new Error(extractErrorMessage(statusBody) ?? 'Media generation failed');
+  }
+  if (hasFailedOutputOptimization(statusBody)) {
+    throw new Error(extractErrorMessage(statusBody) ?? 'Media output optimization failed');
+  }
+
+  let body: unknown = statusBody;
+  const statusUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}`;
+
+  for (let d = 0; d < MEDIA_DOWNLOAD_RETRIES; d++) {
+    if (outputsAwaitingCdn(body)) {
+      if (import.meta.env.DEV && d === 0) {
+        logger.debug('Kubeez — waiting for cdn_ready after completion');
+      }
+      await sleep(MEDIA_DOWNLOAD_RETRY_MS, signal);
+      const r = await fetch(statusUrl, { headers: { 'X-API-Key': apiKey }, signal });
+      if (r.ok) {
+        body = await parseJsonResponse(r);
+      }
+      continue;
+    }
+
+    const prefer = preferVideoOutput ? 'video' : 'image';
+    const mediaUrl =
+      firstOutputMediaUrl(body, prefer) ?? firstOutputMediaUrl(body, prefer === 'video' ? 'image' : 'video');
+    if (!mediaUrl) {
+      await sleep(MEDIA_DOWNLOAD_RETRY_MS, signal);
+      const r = await fetch(statusUrl, { headers: { 'X-API-Key': apiKey }, signal });
+      if (r.ok) {
+        body = await parseJsonResponse(r);
+      }
+      continue;
+    }
+
+    const fetchUrl = rewriteKubeezMediaCdnUrlForFetch(mediaUrl);
+    const mediaRes = await fetch(fetchUrl, { mode: 'cors', signal });
+    if (mediaRes.ok) {
+      return mediaRes.blob();
+    }
+    if (mediaRes.status === 404 && d < MEDIA_DOWNLOAD_RETRIES - 1) {
+      await sleep(MEDIA_DOWNLOAD_RETRY_MS, signal);
+      const r = await fetch(statusUrl, { headers: { 'X-API-Key': apiKey }, signal });
+      if (r.ok) {
+        body = await parseJsonResponse(r);
+      }
+      continue;
+    }
+
+    throw new Error(`Failed to download media (${mediaRes.status})`);
+  }
+
+  throw new Error('Media output not available after completion');
+}
+
 export interface GenerateTextToImageParams {
   apiKey: string;
   baseUrl?: string;
@@ -268,18 +345,17 @@ export interface GenerateTextToImageParams {
   duration?: string;
   /** After completion, prefer downloading a video output vs an image. */
   preferVideoOutput?: boolean;
+  /** Optional body field for models that accept it (e.g. P Image Edit `turbo`). */
+  quality?: string;
 }
 
 /**
- * Starts a Kubeez media job, polls until complete, downloads primary output as a Blob.
+ * Starts a Kubeez media job, prefers `GET /v1/generate/media/{id}/stream` (SSE), then polls GET status
+ * if the stream fails, until complete — downloads primary output as a Blob.
  *
- * Contract (see https://api.kubeez.com/openapi.json — GET /v1/generate/media/{id}):
- * Poll until status is completed and output URLs are non-null (CDN/R2). While CDN upload runs,
- * status may be `processing` with null URLs. Dialogue jobs also use this route (not /generate/music).
- *
- * Why this can fail in the browser while PowerShell works: CLI tools call `https://media.kubeez.com`
- * directly (no CORS). The app must fetch via same-origin `/api/kubeez-media/...` (Vite/Vercel proxy)
- * and may see 404 until the CDN object exists — we wait on `cdn_ready`, retry downloads, and re-poll.
+ * Contract (see https://api.kubeez.com/openapi.json):
+ * - SSE: `event: result` carries the same JSON as GET /v1/generate/media/{id}.
+ * - Poll: until outputs URLs are non-null (CDN). Same-origin `/api/kubeez-media/...` for downloads.
  */
 export async function generateKubeezMediaBlob(params: GenerateTextToImageParams): Promise<Blob> {
   const {
@@ -294,6 +370,7 @@ export async function generateKubeezMediaBlob(params: GenerateTextToImageParams)
     includeAspectRatio = true,
     duration,
     preferVideoOutput = false,
+    quality,
   } = params;
 
   const root = resolveKubeezApiBaseUrl(baseUrl);
@@ -323,6 +400,9 @@ export async function generateKubeezMediaBlob(params: GenerateTextToImageParams)
   if (duration !== undefined && duration !== '') {
     body.duration = duration;
   }
+  if (quality !== undefined && quality !== '') {
+    body.quality = quality;
+  }
 
   const startRes = await fetch(`${root}/v1/generate/media`, {
     method: 'POST',
@@ -347,8 +427,27 @@ export async function generateKubeezMediaBlob(params: GenerateTextToImageParams)
     logger.debug('Kubeez generation started', { generationId });
   }
 
+  const streamUrl = `${root}/v1/generate/media/${encodeURIComponent(generationId)}/stream`;
+  try {
+    const streamedBody = await readKubeezSseUntilResult({ url: streamUrl, apiKey, signal });
+    return await finalizeMediaGenerationFromStatus(streamedBody, {
+      root,
+      apiKey,
+      generationId,
+      preferVideoOutput,
+      signal,
+    });
+  } catch (e) {
+    if (import.meta.env.DEV) {
+      logger.debug('Kubeez media SSE unavailable or failed; falling back to poll', e);
+    }
+  }
+
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
-    await sleep(POLL_INTERVAL_MS, signal);
+    if (attempt > 0) {
+      const delay = attempt < POLL_ATTEMPTS_BEFORE_SLOW_POLL ? POLL_INTERVAL_FAST_MS : POLL_INTERVAL_SLOW_MS;
+      await sleep(delay, signal);
+    }
 
     const statusRes = await fetch(`${root}/v1/generate/media/${encodeURIComponent(generationId)}`, {
       headers: { 'X-API-Key': apiKey },
@@ -390,47 +489,26 @@ export async function generateKubeezMediaBlob(params: GenerateTextToImageParams)
       status === 'finished';
 
     if (terminalComplete) {
-      if (outputsAwaitingCdn(statusBody)) {
-        if (import.meta.env.DEV && attempt % 5 === 0) {
-          logger.debug('Kubeez poll — waiting for outputs[].cdn_ready', { generationId, attempt });
+      try {
+        return await finalizeMediaGenerationFromStatus(statusBody, {
+          root,
+          apiKey,
+          generationId,
+          preferVideoOutput,
+          signal,
+        });
+      } catch (finalizeErr) {
+        const msg = finalizeErr instanceof Error ? finalizeErr.message : '';
+        const maybeRetry =
+          msg.includes('not available after completion') || msg.includes('Failed to download media');
+        if (!maybeRetry) {
+          throw finalizeErr instanceof Error ? finalizeErr : new Error(String(finalizeErr));
         }
-        continue;
-      }
-
-      const prefer = preferVideoOutput ? 'video' : 'image';
-      const mediaUrl = firstOutputMediaUrl(statusBody, prefer) ?? firstOutputMediaUrl(statusBody, prefer === 'video' ? 'image' : 'video');
-      if (!mediaUrl) {
-        // Docs: URLs may still be null until CDN upload finishes; keep polling.
-        if (import.meta.env.DEV && attempt % 5 === 0) {
-          logger.debug('Kubeez poll — completed but output URLs not ready yet', { generationId, attempt });
-        }
-        continue;
-      }
-
-      const fetchUrl = rewriteKubeezMediaCdnUrlForFetch(mediaUrl);
-      let lastDownloadStatus = 0;
-      for (let d = 0; d < MEDIA_DOWNLOAD_RETRIES; d++) {
-        const mediaRes = await fetch(fetchUrl, { mode: 'cors', signal });
-        lastDownloadStatus = mediaRes.status;
-        if (mediaRes.ok) {
-          return mediaRes.blob();
-        }
-        if (mediaRes.status === 404 && d < MEDIA_DOWNLOAD_RETRIES - 1) {
-          await sleep(MEDIA_DOWNLOAD_RETRY_MS, signal);
-          continue;
-        }
-        break;
-      }
-
-      // CDN can lag behind status; re-poll for updated URLs / cdn_ready instead of failing on first stale path.
-      if (lastDownloadStatus === 404) {
         if (import.meta.env.DEV && attempt % 3 === 0) {
-          logger.debug('Kubeez download 404 — re-polling generation status', { generationId, attempt });
+          logger.debug('Kubeez poll — finalize retry (CDN / download)', { generationId, attempt });
         }
         continue;
       }
-
-      throw new Error(`Failed to download media (${lastDownloadStatus})`);
     }
   }
 
