@@ -144,7 +144,7 @@ const OUTPUT_URL_KEYS = [
 /**
  * Resolves a fetchable URL from an output row. Kubeez may return root-relative CDN paths
  * (e.g. `/images/<id>.jpg`) only in `outputs[].url`; those must be picked so
- * `rewriteKubeezMediaCdnUrlForFetch` can map them to `/api/kubeez-media/...`.
+ * `rewriteKubeezMediaCdnUrlForFetch` can map them to `/api/kubeez/cdn/...`.
  */
 function pickHttpUrlFromRecord(entry: Record<string, unknown>): string | null {
   for (const k of OUTPUT_URL_KEYS) {
@@ -323,6 +323,12 @@ async function finalizeMediaGenerationFromStatus(
     const fetchUrl = rewriteKubeezMediaCdnUrlForFetch(mediaUrl);
     const mediaRes = await fetch(fetchUrl, { mode: 'cors', signal });
     if (mediaRes.ok) {
+      const ct = (mediaRes.headers.get('content-type') ?? '').toLowerCase();
+      if (ct.includes('text/html')) {
+        throw new Error(
+          'Media download returned HTML (CDN proxy misconfigured). Map GET /api/kubeez/cdn/* to https://media.kubeez.com/* before /api/kubeez → api (see vercel.json).'
+        );
+      }
       return mediaRes.blob();
     }
     if (mediaRes.status === 404 && d < MEDIA_DOWNLOAD_RETRIES - 1) {
@@ -370,7 +376,7 @@ export interface GenerateTextToImageParams {
  *
  * Contract (see https://api.kubeez.com/openapi.json):
  * - SSE: `event: result` carries the same JSON as GET /v1/generate/media/{id}.
- * - Poll: until outputs URLs are non-null (CDN). Same-origin `/api/kubeez-media/...` for downloads.
+ * - Poll: until outputs URLs are non-null (CDN). Same-origin `/api/kubeez/cdn/...` for downloads.
  */
 export async function generateKubeezMediaBlob(params: GenerateTextToImageParams): Promise<Blob> {
   const {

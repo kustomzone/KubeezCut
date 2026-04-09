@@ -86,12 +86,12 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     /** Same-origin `/api/kubeez/*` → api.kubeez.com (avoids CORS + COEP). Must match production rewrites in vercel.json. */
     proxy: {
-      // Longer prefix MUST be first: `/api/kubeez` matches `/api/kubeez-media/...` via startsWith and would rewrite to `-media/...` on the API host (404).
-      '/api/kubeez-media': {
+      // More specific first: `/api/kubeez` is a prefix of `/api/kubeez/cdn/...`; wrong order sends CDN fetches to the API host (HTML/404).
+      '/api/kubeez/cdn': {
         target: 'https://media.kubeez.com',
         changeOrigin: true,
         secure: true,
-        rewrite: (p) => p.replace(/^\/api\/kubeez-media/, '') || '/',
+        rewrite: (p) => p.replace(/^\/api\/kubeez\/cdn/, '') || '/',
       },
       '/api/kubeez': {
         target: 'https://api.kubeez.com',
@@ -110,11 +110,11 @@ export default defineConfig(({ mode }) => ({
   },
   preview: {
     proxy: {
-      '/api/kubeez-media': {
+      '/api/kubeez/cdn': {
         target: 'https://media.kubeez.com',
         changeOrigin: true,
         secure: true,
-        rewrite: (p) => p.replace(/^\/api\/kubeez-media/, '') || '/',
+        rewrite: (p) => p.replace(/^\/api\/kubeez\/cdn/, '') || '/',
       },
       '/api/kubeez': {
         target: 'https://api.kubeez.com',

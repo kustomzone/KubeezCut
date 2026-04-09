@@ -6,6 +6,10 @@
   "installCommand": "npm ci",
   "rewrites": [
     {
+      "source": "/api/kubeez/cdn/:path*",
+      "destination": "https://media.kubeez.com/:path*"
+    },
+    {
       "source": "/api/kubeez/:path*",
       "destination": "https://api.kubeez.com/:path*"
     },
