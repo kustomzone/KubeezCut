@@ -1,14 +1,14 @@
 /**
- * Browser `fetch()` usually stays same-origin via `/api/kubeez` and `/api/kubeez-media` (Vite, reverse
- * proxy, or Vercel). With `VITE_KUBEEZ_BROWSER_API_URL`, Kubeez host URLs stay absolute for self-hosted
- * editors without that proxy (requires CORS on api/media for your editor origin).
+ * Browser `fetch()` stays same-origin for **media** (`media.kubeez.com` → `/api/kubeez-media`) so downloads
+ * work without CDN CORS (Vite, nginx, Vercel). The **API** may use `VITE_KUBEEZ_BROWSER_API_URL` for direct
+ * `api.kubeez.com` when that origin allows your editor; the CDN often does not, so we never fetch media cross-origin.
  */
 
 /** Must match `vite.config` proxy + production reverse-proxy paths. */
 export const KUBEEZ_API_PROXY_PATH_PREFIX = '/api/kubeez';
 export const KUBEEZ_MEDIA_PROXY_PATH_PREFIX = '/api/kubeez-media';
 
-/** Build-time: non-empty → browser calls this origin for API; CDN rewrite keeps absolute kubeez hosts. */
+/** Build-time: non-empty → browser uses this origin for **API** JSON/SSE only; media still uses `/api/kubeez-media`. */
 export function kubeezBrowserDirectApiOrigin(): string {
   const v = import.meta.env.VITE_KUBEEZ_BROWSER_API_URL;
   if (typeof v !== 'string') return '';
@@ -79,7 +79,7 @@ export function rewriteKubeezUrlForSameOriginFetch(url: string): string {
   if (parsed.hostname === 'api.kubeez.com' && !kubeezPreferDirectKubeezHosts()) {
     return `${KUBEEZ_API_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
   }
-  if (parsed.hostname === 'media.kubeez.com' && !kubeezPreferDirectKubeezHosts()) {
+  if (parsed.hostname === 'media.kubeez.com') {
     return `${KUBEEZ_MEDIA_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
   }
 
