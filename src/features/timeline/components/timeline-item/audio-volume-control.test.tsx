@@ -82,7 +82,7 @@ describe('AudioVolumeControl', () => {
     expect(onVolumeDoubleClick).toHaveBeenCalledTimes(1);
   });
 
-  it('always positions the edit label above the volume line', () => {
+  it('positions the edit label above the volume line when not dragging (no viewport)', () => {
     render(
       <AudioVolumeControl
         trackLocked={false}
@@ -98,5 +98,28 @@ describe('AudioVolumeControl', () => {
     const label = screen.getByText('Volume -12.0 dB');
     expect(label.className).toContain('-translate-y-full');
     expect(label).toHaveStyle({ top: 'calc(var(--timeline-audio-volume-line-y, 40%) - 10px)' });
+  });
+
+  it('fixes the edit label to the pointer while dragging', () => {
+    render(
+      <AudioVolumeControl
+        trackLocked={false}
+        activeTool="select"
+        lineYPercent={40}
+        isEditing={true}
+        editLabel="Volume +3.0 dB"
+        editLabelViewport={{ clientX: 120, clientY: 88 }}
+        onVolumeMouseDown={vi.fn()}
+        onVolumeDoubleClick={vi.fn()}
+      />
+    );
+
+    const label = screen.getByText('Volume +3.0 dB');
+    expect(label.className).toContain('fixed');
+    expect(label).toHaveStyle({
+      left: '120px',
+      top: '88px',
+      transform: 'translate(-50%, calc(-100% - 8px))',
+    });
   });
 });

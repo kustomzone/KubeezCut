@@ -9,6 +9,8 @@ interface AudioVolumeControlProps {
   isEditing: boolean;
   editLabel?: string | null;
   editLabelRef?: RefObject<HTMLDivElement | null>;
+  /** When set during drag, show the dB tooltip fixed to the pointer instead of centered on the clip. */
+  editLabelViewport?: { clientX: number; clientY: number } | null;
   onVolumeMouseDown: (e: React.MouseEvent) => void;
   onVolumeDoubleClick: () => void;
 }
@@ -20,6 +22,7 @@ export const AudioVolumeControl = memo(function AudioVolumeControl({
   isEditing,
   editLabel,
   editLabelRef,
+  editLabelViewport,
   onVolumeMouseDown,
   onVolumeDoubleClick,
 }: AudioVolumeControlProps) {
@@ -91,8 +94,20 @@ export const AudioVolumeControl = memo(function AudioVolumeControl({
       {isEditing && editLabel && (
         <div
           ref={editLabelRef}
-          className="absolute left-1/2 -translate-x-1/2 -translate-y-full rounded bg-slate-950/95 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-lg whitespace-nowrap"
-          style={{ top: `calc(var(--timeline-audio-volume-line-y, ${lineYPercent}%) - 10px)` }}
+          className={
+            editLabelViewport
+              ? 'pointer-events-none fixed z-[9999] rounded bg-slate-950/95 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-lg whitespace-nowrap'
+              : 'pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-full rounded bg-slate-950/95 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-lg whitespace-nowrap'
+          }
+          style={
+            editLabelViewport
+              ? {
+                  left: editLabelViewport.clientX,
+                  top: editLabelViewport.clientY,
+                  transform: 'translate(-50%, calc(-100% - 8px))',
+                }
+              : { top: `calc(var(--timeline-audio-volume-line-y, ${lineYPercent}%) - 10px)` }
+          }
         >
           {editLabel}
         </div>

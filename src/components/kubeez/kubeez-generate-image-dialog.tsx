@@ -1216,7 +1216,7 @@ export function KubeezGenerateImageDialog({
             modelsLoading={modelsLoading}
           />
 
-          <div className="mt-4 flex min-h-0 w-full flex-col gap-3 overflow-y-auto border-t border-border/50 pt-4 [scrollbar-gutter:stable] lg:mt-0 lg:w-[min(100%,24rem)] lg:flex-none lg:shrink-0 lg:self-stretch lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+          <div className="mt-4 flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain border-t border-border/50 pt-4 [scrollbar-gutter:stable] lg:mt-0 lg:h-full lg:max-h-full lg:w-[min(100%,24rem)] lg:flex-none lg:self-stretch lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
             <KubeezGenerateSelectedModelPanel
               model={uiModel ?? null}
               selectedModelId={selectedModelId}
@@ -1261,14 +1261,14 @@ export function KubeezGenerateImageDialog({
             )}
 
             {isSpeechModel && (
-              <div className="grid shrink-0 gap-3 sm:grid-cols-2">
+              <div className="grid min-h-0 gap-3 sm:grid-cols-2">
                 <div className="space-y-2 sm:col-span-1">
                   <Label className="text-foreground/90">Voice</Label>
                   <Select value={dialogueVoice} onValueChange={setDialogueVoice} disabled={isStartingJob}>
                     <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[min(280px,50vh)]">
                       {KUBEEZ_DIALOGUE_VOICE_OPTIONS.map((v) => (
                         <SelectItem key={v.id} value={v.id}>
                           {v.label}
@@ -1283,7 +1283,7 @@ export function KubeezGenerateImageDialog({
                     <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[min(280px,50vh)]">
                       {KUBEEZ_DIALOGUE_LANGUAGE_OPTIONS.map((l) => (
                         <SelectItem key={l.id} value={l.id}>
                           {l.label}
@@ -1298,7 +1298,7 @@ export function KubeezGenerateImageDialog({
                     <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[min(280px,50vh)]">
                       <SelectItem value="0">0 (more expressive)</SelectItem>
                       <SelectItem value="0.25">0.25</SelectItem>
                       <SelectItem value="0.5">0.5 (default)</SelectItem>

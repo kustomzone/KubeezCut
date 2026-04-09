@@ -1957,7 +1957,16 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     originalVolume: number;
     isCommitting: boolean;
   } | null>(null);
+  const [audioVolumeLabelViewport, setAudioVolumeLabelViewport] = useState<{
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const audioVolumeCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (audioVolumeEdit === null) {
+      setAudioVolumeLabelViewport(null);
+    }
+  }, [audioVolumeEdit]);
   const audioVolumePreviewRef = useRef(item.type === 'audio' ? (item.volume ?? 0) : 0);
   const audioVolumeEditLabelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => () => {
@@ -2513,7 +2522,9 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     const originalVolume = item.volume ?? 0;
     const dragStartLiveGain = getMixerLiveGain(item.id);
     const startClientY = e.clientY;
+    const startClientX = e.clientX;
     let latestClientY = startClientY;
+    let latestClientX = startClientX;
     let latestPreviewVolume = originalVolume;
     let isDragActive = false;
     let activationTimeoutId: number | null = null;
@@ -2558,6 +2569,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         originalVolume,
         isCommitting: false,
       });
+      setAudioVolumeLabelViewport({ clientX: latestClientX, clientY: latestClientY });
       applyPreview(computeVolumeDb(latestClientY));
     };
 
@@ -2576,6 +2588,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
 
     const handleWindowMouseMove = (event: MouseEvent) => {
       latestClientY = event.clientY;
+      latestClientX = event.clientX;
 
       if (!isDragActive) {
         if (Math.abs(event.clientY - startClientY) < AUDIO_VOLUME_DRAG_ACTIVATION_DISTANCE_PX) {
@@ -2587,12 +2600,14 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         return;
       }
 
+      setAudioVolumeLabelViewport({ clientX: event.clientX, clientY: event.clientY });
       applyPreview(computeVolumeDb(event.clientY));
     };
     const handleWindowMouseUp = () => {
       if (!isDragActive) {
         audioVolumeCleanupRef.current?.();
         audioVolumeCleanupRef.current = null;
+        setAudioVolumeLabelViewport(null);
         finalizeAudioVolumeChange(originalVolume);
         return;
       }
@@ -3342,6 +3357,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
                 isEditing={audioVolumeEdit !== null}
                 editLabel={audioVolumeEditLabel}
                 editLabelRef={audioVolumeEditLabelRef}
+                editLabelViewport={audioVolumeLabelViewport}
                 onVolumeMouseDown={handleAudioVolumeMouseDown}
                 onVolumeDoubleClick={handleAudioVolumeDoubleClick}
               />
