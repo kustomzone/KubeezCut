@@ -388,7 +388,10 @@ function Settings() {
           <h2 className="text-lg font-semibold border-b border-border pb-2">About</h2>
 
           <div className="grid gap-2 text-sm text-muted-foreground">
-            <p>KubeezCut — browser-based video editor</p>
+            <p>
+              KubeezCut — browser-based multi-track editor: import media locally, export on your device,
+              optional AI via Kubeez.
+            </p>
             <p>Built with React and modern web technologies.</p>
           </div>
         </section>

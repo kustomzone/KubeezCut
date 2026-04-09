@@ -8,22 +8,20 @@
 ```
 🎬 Edit videos. Directly in your browser.
 
-KubeezCut is a powerful multi-track video editor that runs entirely locally using modern browser APIs.
+KubeezCut is a powerful multi-track video editor that runs in your browser using modern web APIs—**local-first**: your library and projects stay on your device unless you choose optional AI features.
 
 No installs.
-No uploads.
-No cloud processing.
+Import media from disk into the browser; timeline and export run on your machine.
+Optional **Kubeez** AI (images, video, music, speech) uses your API key when you generate.
 
-Everything runs on your machine via:
+Core editing uses:
 
 ⚡ WebGPU
 ⚡ WebCodecs
 ⚡ OPFS
 ⚡ File System Access API
 
-Inspired by open-source projects like [FreeCut](https://github.com/walterlow/freecut) and [OpenCut](https://github.com/OpenCut-app/OpenCut), KubeezCut brings professional editing workflows to the browser.
-
-We also built an AI-inspired flow so you can add generated media—images, audio, and video—into your timeline via the Kubeez API, alongside files from your machine.
+Inspired by open-source projects like [FreeCut](https://github.com/walterlow/freecut) and [OpenCut](https://github.com/OpenCut-app/OpenCut), KubeezCut brings professional editing workflows to the browser—combine disk imports and Kubeez-generated clips on the same timeline.
 
 ✨ Features
 🎞 Timeline & Editing
