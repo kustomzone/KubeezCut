@@ -1200,7 +1200,7 @@ export function KubeezGenerateImageDialog({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden px-4 py-3 sm:px-5 lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden px-4 py-3 sm:px-5 lg:flex-row lg:items-stretch">
           <KubeezGenerateModelsColumn
             missingKey={missingKey}
             imageModels={imageModels}
@@ -1216,7 +1216,8 @@ export function KubeezGenerateImageDialog({
             modelsLoading={modelsLoading}
           />
 
-          <div className="mt-4 flex min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain border-t border-border/50 pt-4 [scrollbar-gutter:stable] lg:mt-0 lg:h-full lg:max-h-full lg:w-[min(100%,24rem)] lg:flex-none lg:self-stretch lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+          <div className="mt-4 flex min-h-0 w-full min-w-0 flex-1 flex-col border-t border-border/50 pt-4 lg:mt-0 lg:w-[min(100%,24rem)] lg:flex-none lg:self-stretch lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
             <KubeezGenerateSelectedModelPanel
               model={uiModel ?? null}
               selectedModelId={selectedModelId}
@@ -1688,6 +1689,7 @@ export function KubeezGenerateImageDialog({
                 </Select>
               </div>
             )}
+            </div>
           </div>
         </div>
 
