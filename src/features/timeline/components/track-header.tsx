@@ -1,5 +1,16 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { buttonVariants } from '@/components/ui/button-variants';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -7,7 +18,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Video, Music, Volume2, VolumeX, Eye, EyeOff, Lock } from 'lucide-react';
+import { Video, Music, Volume2, VolumeX, Eye, EyeOff, Lock, Trash2 } from 'lucide-react';
 import type { TimelineTrack } from '@/types/timeline';
 import { usePlaybackStore } from '@/shared/state/playback';
 import { useTrackDrag } from '../hooks/use-track-drag';
@@ -18,6 +29,7 @@ import {
 } from '../utils/execute-timeline-media-drop';
 import { TIMELINE_SIDEBAR_WIDTH } from '../constants';
 import { getTrackKind } from '@/features/timeline/utils/classic-tracks';
+import { cn } from '@/shared/ui/cn';
 
 interface TrackHeaderProps {
   track: TimelineTrack;
@@ -63,11 +75,19 @@ export const TrackHeader = memo(function TrackHeader({
   onDeleteTrack,
   onDeleteEmptyTracks,
 }: TrackHeaderProps) {
+  const [deleteTrackDialogOpen, setDeleteTrackDialogOpen] = useState(false);
   const trackKind = getTrackKind(track);
   const isMuted = track.muted;
   const isHidden = track.visible === false;
+  const canDeleteThisTrack = canDeleteTrack && !track.locked;
 
   const { handleDragStart } = useTrackDrag(track);
+
+  const openDeleteTrackDialog = () => {
+    if (canDeleteThisTrack) {
+      setDeleteTrackDialogOpen(true);
+    }
+  };
 
   const handleHeaderMediaDragOver = (e: React.DragEvent) => {
     if (!timelineDragAcceptsMediaTypes(e)) {
@@ -102,6 +122,7 @@ export const TrackHeader = memo(function TrackHeader({
   const btnClass = 'h-7 w-7 shrink-0 rounded p-0';
 
   return (
+    <>
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
@@ -176,6 +197,34 @@ export const TrackHeader = memo(function TrackHeader({
                 <Music className="size-3.5 shrink-0 text-muted-foreground opacity-70" aria-hidden />
               </>
             )}
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                btnClass,
+                canDeleteThisTrack
+                  ? 'text-destructive hover:bg-destructive/15 hover:text-destructive focus-visible:ring-destructive'
+                  : 'text-muted-foreground'
+              )}
+              disabled={!canDeleteThisTrack}
+              onClick={(e) => {
+                e.stopPropagation();
+                openDeleteTrackDialog();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              aria-label={canDeleteThisTrack ? 'Delete track' : track.locked ? 'Unlock track to delete it' : 'Cannot delete the only track'}
+              data-tooltip={
+                !canDeleteTrack
+                  ? 'Cannot delete the only track'
+                  : track.locked
+                    ? 'Unlock track to delete it'
+                    : 'Delete track and clips on it'
+              }
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
           </div>
         </div>
       </ContextMenuTrigger>
@@ -189,7 +238,13 @@ export const TrackHeader = memo(function TrackHeader({
         <ContextMenuItem onClick={onAddVideoTrack}>Add video track</ContextMenuItem>
         <ContextMenuItem onClick={onAddAudioTrack}>Add audio track</ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem disabled={!canDeleteTrack} onClick={onDeleteTrack}>
+        <ContextMenuItem
+          disabled={!canDeleteThisTrack}
+          className="text-destructive focus:text-destructive"
+          onSelect={() => {
+            openDeleteTrackDialog();
+          }}
+        >
           Delete track
         </ContextMenuItem>
         <ContextMenuItem disabled={!canDeleteEmptyTracks} onClick={onDeleteEmptyTracks}>
@@ -197,5 +252,29 @@ export const TrackHeader = memo(function TrackHeader({
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
+
+    <AlertDialog open={deleteTrackDialogOpen} onOpenChange={setDeleteTrackDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete track &ldquo;{track.name}&rdquo;?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes the entire lane and all clips on it (including linked audio/video). You can still undo
+            afterward from the Edit menu or with your usual Undo shortcut.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className={buttonVariants({ variant: 'destructive' })}
+            onClick={() => {
+              onDeleteTrack();
+            }}
+          >
+            Delete track
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }, areTrackHeaderPropsEqual);

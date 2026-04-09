@@ -1968,7 +1968,6 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     }
   }, [audioVolumeEdit]);
   const audioVolumePreviewRef = useRef(item.type === 'audio' ? (item.volume ?? 0) : 0);
-  const audioVolumeEditLabelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => () => {
     videoFadeCleanupRef.current?.();
     audioFadeCleanupRef.current?.();
@@ -2039,7 +2038,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     if (!audioVolumeEdit) return null;
     const previewVolume = audioVolumePreviewRef.current;
     return `Volume ${previewVolume >= 0 ? '+' : ''}${previewVolume.toFixed(1)} dB`;
-  }, [audioVolumeEdit]);
+  }, [audioVolumeEdit, audioVolumeLabelViewport]);
   const audioVolumeLineY = useMemo(
     () => item.type === 'audio' ? getAudioVolumeLineY(displayedAudioVolumeDb, AUDIO_ENVELOPE_VIEWBOX_HEIGHT) : AUDIO_ENVELOPE_VIEWBOX_HEIGHT / 2,
     [displayedAudioVolumeDb, item.type]
@@ -2132,9 +2131,6 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       );
     }
 
-    if (audioVolumeEditLabelRef.current) {
-      audioVolumeEditLabelRef.current.textContent = `Volume ${previewVolumeDb >= 0 ? '+' : ''}${previewVolumeDb.toFixed(1)} dB`;
-    }
   }, []);
   const itemType = item.type;
   const itemVolume = item.volume;
@@ -3356,7 +3352,6 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
                 lineYPercent={audioVolumeLineYPercent}
                 isEditing={audioVolumeEdit !== null}
                 editLabel={audioVolumeEditLabel}
-                editLabelRef={audioVolumeEditLabelRef}
                 editLabelViewport={audioVolumeLabelViewport}
                 onVolumeMouseDown={handleAudioVolumeMouseDown}
                 onVolumeDoubleClick={handleAudioVolumeDoubleClick}

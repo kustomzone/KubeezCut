@@ -39,6 +39,10 @@ export interface TrackMediaGhostPreview {
   type: DroppableMediaType;
   targetTrackId: string;
   /**
+   * New V/image lane not committed yet — render ghost row **above** the row being hovered (e.g. spawn V1 over A1).
+   */
+  previewAboveTrackId?: string;
+  /**
    * Placement is on a track that does not exist in the store until drop (e.g. first A1).
    * Render this ghost lane directly under this classic track row.
    */
@@ -121,11 +125,17 @@ export function planTrackMediaDropPlacements<T>(params: {
   tracks: TimelineTrack[];
   existingItems: CollisionRect[];
   dropTargetTrackId: string;
+  /**
+   * True when the pointer is in the bottom strip of an audio row: create/use a fresh audio lane
+   * below that row (multi-entry drops share one spawned lane).
+   */
+  preferNewAudioLane?: boolean;
 }): { plannedItems: Array<TrackMediaDropPlannedItem<T>>; tracks: TimelineTrack[] } {
   let currentPosition = Math.max(0, params.dropFrame);
   const reservedRanges: CollisionRect[] = [];
   const plannedItems: Array<TrackMediaDropPlannedItem<T>> = [];
   let workingTracks = [...params.tracks];
+  let preferNewAudioSpawnedId: string | null = null;
 
   for (const entry of params.entries) {
     const targetTrack = workingTracks.find((candidate) => candidate.id === params.dropTargetTrackId);
@@ -136,32 +146,75 @@ export function planTrackMediaDropPlacements<T>(params: {
     const itemsToCheck: CollisionRect[] = [...params.existingItems, ...reservedRanges];
     const isVideoWithAudio = entry.mediaType === 'video' && !!entry.hasLinkedAudio;
     const isVisualMedia = entry.mediaType === 'video' || entry.mediaType === 'image';
-    const targetTrackKind = getTrackKind(targetTrack);
 
-    // Keep visuals off audio-only lanes (use the video stack / new-track zone for those).
-    // Audio may target a video track: we create / reuse an audio lane below (OpenCut-style V-only stack).
-    if (isVisualMedia && targetTrackKind === 'audio') {
-      continue;
+    /**
+     * Drops often resolve to the active/hovered track. If that lane is audio but the payload is
+     * video/image, retarget to the nearest video row above (same stack) or create a video lane —
+     * otherwise the plan was empty and nothing appeared on drop.
+     */
+    let resolvedTargetTrack = targetTrack;
+    if (isVisualMedia && getTrackKind(resolvedTargetTrack) === 'audio') {
+      const videoPeer = findNearestTrackByKind({
+        tracks: workingTracks,
+        targetTrack: resolvedTargetTrack,
+        kind: 'video',
+        direction: 'above',
+      });
+      if (videoPeer) {
+        resolvedTargetTrack = videoPeer;
+      } else {
+        const createdVideo = createClassicTrack({
+          tracks: workingTracks,
+          kind: 'video',
+          order: getAdjacentTrackOrder(workingTracks, resolvedTargetTrack, 'above'),
+          height: resolvedTargetTrack.height,
+        });
+        workingTracks = [...workingTracks, createdVideo];
+        resolvedTargetTrack = createdVideo;
+      }
+    }
+
+    if (
+      !isVisualMedia
+      && entry.mediaType === 'audio'
+      && getTrackKind(resolvedTargetTrack) === 'audio'
+    ) {
+      if (preferNewAudioSpawnedId) {
+        const reuse = workingTracks.find((t) => t.id === preferNewAudioSpawnedId);
+        if (reuse) {
+          resolvedTargetTrack = reuse;
+        }
+      } else if (params.preferNewAudioLane) {
+        const createdAudio = createClassicTrack({
+          tracks: workingTracks,
+          kind: 'audio',
+          order: getAdjacentTrackOrder(workingTracks, resolvedTargetTrack, 'below'),
+          height: resolvedTargetTrack.height,
+        });
+        workingTracks = [...workingTracks, createdAudio];
+        resolvedTargetTrack = createdAudio;
+        preferNewAudioSpawnedId = createdAudio.id;
+      }
     }
 
     const primaryTrackState = ensureTrackForKind(
       workingTracks,
-      targetTrack,
+      resolvedTargetTrack,
       isVisualMedia ? 'video' : 'audio',
       isVisualMedia ? 'above' : 'below',
-      getTrackKind(targetTrack) === null
+      getTrackKind(resolvedTargetTrack) === null
     );
     workingTracks = primaryTrackState.tracks;
 
     let placements: TrackMediaDropPlacement[];
 
     if (isVideoWithAudio) {
-      const hoveredKind = getTrackKind(targetTrack);
+      const hoveredKind = getTrackKind(resolvedTargetTrack);
       const linkedTrackTargets = resolveLinkedDragTrackTargets({
         tracks: workingTracks,
-        hoveredTrackId: params.dropTargetTrackId,
+        hoveredTrackId: resolvedTargetTrack.id,
         zone: hoveredKind === 'audio' ? 'audio' : 'video',
-        preferredTrackHeight: targetTrack.height,
+        preferredTrackHeight: resolvedTargetTrack.height,
       });
 
       if (!linkedTrackTargets) {
@@ -240,12 +293,16 @@ export function buildGhostPreviewsFromTrackMediaDropPlan<T>(params: {
   frameToPixels: (frame: number) => number;
   /** IDs of tracks currently in the timeline store (excludes planned-but-uncommitted lanes). */
   existingTrackIds: ReadonlySet<string>;
-  /** Track under the pointer; anchors `previewBelowTrackId` for new audio lanes. */
+  /** Track under the pointer; anchors ephemeral lanes (`previewAboveTrackId` / `previewBelowTrackId`). */
   dropTargetTrackId: string;
 }): TrackMediaGhostPreview[] {
   return params.plannedItems.flatMap((plannedItem) => (
     plannedItem.placements.map((placement) => {
       const inStore = params.existingTrackIds.has(placement.trackId);
+      const isVisualPlacement =
+        placement.mediaType === 'video' || placement.mediaType === 'image';
+      const previewAboveTrackId =
+        !inStore && isVisualPlacement ? params.dropTargetTrackId : undefined;
       const previewBelowTrackId =
         !inStore && placement.mediaType === 'audio'
           ? params.dropTargetTrackId
@@ -257,6 +314,7 @@ export function buildGhostPreviewsFromTrackMediaDropPlan<T>(params: {
         label: plannedItem.entry.label,
         type: placement.mediaType,
         targetTrackId: placement.trackId,
+        ...(previewAboveTrackId !== undefined ? { previewAboveTrackId } : {}),
         ...(previewBelowTrackId !== undefined ? { previewBelowTrackId } : {}),
       };
     })

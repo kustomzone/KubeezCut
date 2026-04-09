@@ -132,6 +132,7 @@ async function resolveTimelineItemsForEntries(
   entries: DroppedMediaEntry[],
   dropFrame: number,
   dropTargetTrackId: string,
+  preferNewAudioLane?: boolean,
 ): Promise<{ items: TimelineItemType[]; tracks: ReturnType<typeof useTimelineStore.getState>['tracks'] }> {
   const fps = useTimelineStore.getState().fps;
   const { plannedItems, tracks: workingTracks } = planTrackMediaDropPlacements({
@@ -146,6 +147,7 @@ async function resolveTimelineItemsForEntries(
     tracks: useTimelineStore.getState().tracks,
     existingItems: useTimelineStore.getState().items,
     dropTargetTrackId,
+    preferNewAudioLane,
   });
 
   if (plannedItems.length === 0) {
@@ -261,6 +263,8 @@ export interface ExecuteTimelineMediaDropParams {
   dataTransfer: DataTransfer;
   dropFrame: number;
   dropTargetTrackId: string;
+  /** From audio lane bottom strip — spawn new row below hovered track. */
+  preferNewAudioLane?: boolean;
 }
 
 /**
@@ -271,6 +275,7 @@ export async function executeTimelineMediaDrop({
   dataTransfer,
   dropFrame,
   dropTargetTrackId: initialDropTargetTrackId,
+  preferNewAudioLane = false,
 }: ExecuteTimelineMediaDropParams): Promise<void> {
   const { setTracks, tracks: tracksBefore } = useTimelineStore.getState();
   if (tracksBefore.length === 0) {
@@ -421,7 +426,12 @@ export async function executeTimelineMediaDrop({
         return;
       }
 
-      const dropResult = await resolveTimelineItemsForEntries(entries, dropFrame, dropTargetTrackId);
+      const dropResult = await resolveTimelineItemsForEntries(
+        entries,
+        dropFrame,
+        dropTargetTrackId,
+        preferNewAudioLane,
+      );
       if (dropResult.items.length === 0) {
         toast.error('Unable to add dropped media items');
         return;
@@ -497,7 +507,12 @@ export async function executeTimelineMediaDrop({
     return;
   }
 
-  const dropResult = await resolveTimelineItemsForEntries(droppedEntries, dropFrame, dropTargetTrackId);
+  const dropResult = await resolveTimelineItemsForEntries(
+    droppedEntries,
+    dropFrame,
+    dropTargetTrackId,
+    preferNewAudioLane,
+  );
   if (dropResult.items.length === 0) {
     toast.error('Unable to add dropped files to the timeline');
     return;

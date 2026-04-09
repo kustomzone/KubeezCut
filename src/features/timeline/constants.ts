@@ -31,6 +31,12 @@ export const MAX_NEW_TRACK_ZONE_HEIGHT_PX = 0;
 /** Always-visible strip at the top of the video stack to drop media and spawn a new video lane above existing tracks. */
 export const MIN_TOP_VIDEO_NEW_TRACK_DROP_ZONE_PX = 28;
 
+/**
+ * Bottom portion of an audio lane: dragging library/file audio here spawns a new audio row below
+ * (ghost uses `previewBelowTrackId`) instead of filling the hovered lane.
+ */
+export const AUDIO_NEW_LANE_TARGET_STRIP_FRACTION = 0.22;
+
 // Clip fills entire track height (selection ring is inset)
 const CLIP_HEIGHT = DEFAULT_TRACK_HEIGHT;
 

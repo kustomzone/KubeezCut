@@ -68,6 +68,47 @@ describe('planNewTrackZonePlacements', () => {
     ]);
   });
 
+  it('spawns a video track when image is dropped on the audio zone (audio-only layout)', () => {
+    const tracks = [{
+      id: 'a1',
+      name: 'A1',
+      kind: 'audio' as const,
+      order: 0,
+      height: 80,
+      locked: false,
+      visible: true,
+      muted: false,
+      solo: false,
+      volume: 0,
+      items: [],
+    }];
+
+    const result = planNewTrackZonePlacements({
+      entries: [{
+        payload: { id: 'img-1' },
+        label: 'still.png',
+        mediaType: 'image',
+        durationInFrames: 40,
+      }],
+      dropFrame: 6,
+      tracks,
+      existingItems: [],
+      anchorTrackId: 'a1',
+      zone: 'audio',
+      preferredTrackHeight: 80,
+    });
+
+    expect(result.plannedItems).toHaveLength(1);
+    const videoTrack = result.tracks.find((t) => t.kind === 'video');
+    expect(videoTrack).toBeDefined();
+    expect(result.plannedItems[0]!.placements[0]).toMatchObject({
+      mediaType: 'image',
+      trackId: videoTrack!.id,
+      from: 6,
+      durationInFrames: 40,
+    });
+  });
+
   it('creates a fresh audio track for audio-only media in the audio zone', () => {
     const tracks = createDefaultClassicTracks(72);
 

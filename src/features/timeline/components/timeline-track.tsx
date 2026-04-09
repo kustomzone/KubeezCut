@@ -38,6 +38,8 @@ import {
 } from '../utils/track-media-drop';
 import { executeTimelineMediaDrop } from '../utils/execute-timeline-media-drop';
 import { getTimelineScrollContainer } from '../utils/timeline-scroll-container';
+import { getTrackKind } from '../utils/classic-tracks';
+import { AUDIO_NEW_LANE_TARGET_STRIP_FRACTION } from '../constants';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -115,6 +117,31 @@ function isDroppableMediaType(value: unknown): value is DroppableMediaType {
   return value === 'video' || value === 'audio' || value === 'image';
 }
 
+function computePreferNewAudioLaneFromPointer(
+  clientY: number,
+  trackRow: TimelineTrackType,
+  trackRowEl: HTMLElement | null,
+  treatAsAudioOnly: boolean,
+): boolean {
+  if (!treatAsAudioOnly || getTrackKind(trackRow) !== 'audio' || !trackRowEl) {
+    return false;
+  }
+  const rect = trackRowEl.getBoundingClientRect();
+  if (rect.height <= 0) {
+    return false;
+  }
+  const ratioFromTop = (clientY - rect.top) / rect.height;
+  return ratioFromTop >= (1 - AUDIO_NEW_LANE_TARGET_STRIP_FRACTION);
+}
+
+function dataTransferLooksAudioOnlyFiles(dataTransfer: DataTransfer): boolean {
+  const fileItems = Array.from(dataTransfer.items).filter((item) => item.kind === 'file');
+  if (fileItems.length === 0) {
+    return false;
+  }
+  return fileItems.every((item) => typeof item.type === 'string' && item.type.startsWith('audio/'));
+}
+
 function isValidDragMediaItem(value: unknown): value is DragMediaItem {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<DragMediaItem>;
@@ -157,6 +184,8 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
   const externalPreviewPromiseRef = useRef<Promise<void> | null>(null);
   const externalPreviewTokenRef = useRef(0);
   const lastDragFrameRef = useRef(0);
+  const lastDragPointerYRef = useRef(0);
+  const preferNewAudioLaneRef = useRef(false);
 
   // Resolve whether this track is effectively disabled for drops.
   // Uses the shared resolveEffectiveTrackStates helper so group-inherited
@@ -188,6 +217,10 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
     () => allGhostPreviews.filter((ghost) => ghost.targetTrackId === track.id),
     [allGhostPreviews, track.id]
   );
+  const previewAboveGhosts = useMemo(
+    () => allGhostPreviews.filter((ghost) => ghost.previewAboveTrackId === track.id),
+    [allGhostPreviews, track.id]
+  );
   const previewBelowGhosts = useMemo(
     () => allGhostPreviews.filter((ghost) => ghost.previewBelowTrackId === track.id),
     [allGhostPreviews, track.id]
@@ -195,7 +228,11 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
   /** Drop lands on another lane (e.g. audio planned below while pointer is over V1) — avoid video lane “empty” highlight. */
   const activeGhostsTargetOnlyOtherTracks =
     allGhostPreviews.length > 0 &&
-    allGhostPreviews.every((ghost) => ghost.targetTrackId !== track.id);
+    allGhostPreviews.every((ghost) =>
+      ghost.targetTrackId !== track.id
+      && ghost.previewBelowTrackId !== track.id
+      && ghost.previewAboveTrackId !== track.id
+    );
   const ghostHighlightClasses = useMemo(
     () => getGhostHighlightClasses(ghostPreviews),
     [ghostPreviews]
@@ -215,7 +252,8 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
 
   const buildGhostPreviewsForEntries = useCallback((
     entries: Array<{ label: string; mediaType: DroppableMediaType; duration?: number; hasLinkedAudio?: boolean }>,
-    dropFrame: number
+    dropFrame: number,
+    preferNewAudioLane: boolean,
   ): GhostPreviewItem[] => {
     const { plannedItems } = planTrackMediaDropPlacements({
       entries: entries.map((entry) => ({
@@ -233,13 +271,15 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
       tracks: useTimelineStore.getState().tracks,
       existingItems: useTimelineStore.getState().items,
       dropTargetTrackId: track.id,
+      preferNewAudioLane,
     });
 
     const store = useTimelineStore.getState();
+    const existingTrackIds = new Set(store.tracks.map((t) => t.id));
     return buildGhostPreviewsFromTrackMediaDropPlan({
       plannedItems,
       frameToPixels,
-      existingTrackIds: new Set(store.tracks.map((t) => t.id)),
+      existingTrackIds,
       dropTargetTrackId: track.id,
     });
   }, [fps, frameToPixels, track.id]);
@@ -352,7 +392,17 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
       externalPreviewPromiseRef.current = null;
 
       if (previewEntries.length > 0) {
-        setTrackGhostPreviews(buildGhostPreviewsForEntries(previewEntries, lastDragFrameRef.current));
+        const audioOnly = previewEntries.every((p) => p.mediaType === 'audio');
+        const preferNew = computePreferNewAudioLaneFromPointer(
+          lastDragPointerYRef.current,
+          track,
+          trackRef.current,
+          audioOnly,
+        );
+        preferNewAudioLaneRef.current = preferNew;
+        setTrackGhostPreviews(
+          buildGhostPreviewsForEntries(previewEntries, lastDragFrameRef.current, preferNew),
+        );
       }
     })().catch((error) => {
       if (token === externalPreviewTokenRef.current) {
@@ -362,7 +412,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
     });
 
     externalPreviewPromiseRef.current = previewPromise;
-  }, [buildGhostPreviewsForEntries, clearExternalPreviewSession, setTrackGhostPreviews]);
+  }, [buildGhostPreviewsForEntries, clearExternalPreviewSession, setTrackGhostPreviews, track]);
 
   // Get item IDs from the full store (not virtualized subset) so drag detection
   // works even if the source item scrolls out of the visible buffer mid-drag.
@@ -443,6 +493,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
 
   const handleDragOver = (e: React.DragEvent) => {
     if (isDropDisabled) {
+      preferNewAudioLaneRef.current = false;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'none';
       return;
@@ -451,6 +502,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
     const data = getMediaDragData();
     const hasExternalFiles = !data && e.dataTransfer.types.includes('Files');
     if (!data && !hasExternalFiles) {
+      preferNewAudioLaneRef.current = false;
       setIsExternalDragOver(false);
       clearTrackGhostPreviews();
       return;
@@ -460,9 +512,11 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
     e.dataTransfer.dropEffect = 'copy';
     setIsDragOver(true);
     setIsExternalDragOver(hasExternalFiles);
+    lastDragPointerYRef.current = e.clientY;
 
     const dropFrame = getDropFrame(e);
     if (dropFrame === null) {
+      preferNewAudioLaneRef.current = false;
       clearTrackGhostPreviews();
       return;
     }
@@ -470,7 +524,10 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
 
     if (hasExternalFiles) {
       if (externalPreviewItemsRef.current && externalPreviewItemsRef.current.length > 0) {
-        const previews = buildGhostPreviewsForEntries(externalPreviewItemsRef.current, dropFrame);
+        const audioOnly = externalPreviewItemsRef.current.every((p) => p.mediaType === 'audio');
+        const preferNew = computePreferNewAudioLaneFromPointer(e.clientY, track, trackRef.current, audioOnly);
+        preferNewAudioLaneRef.current = preferNew;
+        const previews = buildGhostPreviewsForEntries(externalPreviewItemsRef.current, dropFrame, preferNew);
         if (previews.length === 0) {
           e.dataTransfer.dropEffect = 'none';
           setIsDragOver(false);
@@ -479,13 +536,24 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
         setTrackGhostPreviews(previews);
       } else {
         const fileItemCount = Array.from(e.dataTransfer.items).filter((item) => item.kind === 'file').length;
-        setTrackGhostPreviews(buildGenericExternalGhostPreviews(dropFrame, Math.max(1, fileItemCount)));
+        const audioHint = dataTransferLooksAudioOnlyFiles(e.dataTransfer);
+        const preferNew = computePreferNewAudioLaneFromPointer(e.clientY, track, trackRef.current, audioHint);
+        preferNewAudioLaneRef.current = preferNew;
+        const previews = audioHint
+          ? buildGhostPreviewsForEntries(
+            [{ label: fileItemCount > 1 ? `${fileItemCount} files` : 'Drop media', mediaType: 'audio', duration: 3 }],
+            dropFrame,
+            preferNew,
+          )
+          : buildGenericExternalGhostPreviews(dropFrame, Math.max(1, fileItemCount));
+        setTrackGhostPreviews(previews);
         primeExternalPreviewEntries(e.dataTransfer);
       }
       return;
     }
 
     if (!data) {
+      preferNewAudioLaneRef.current = false;
       clearTrackGhostPreviews();
       return;
     }
@@ -499,11 +567,13 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
         insertedCompositionId: data.compositionId,
         compositionById: useCompositionsStore.getState().compositionById,
       })) {
+        preferNewAudioLaneRef.current = false;
         e.dataTransfer.dropEffect = 'none';
         clearTrackGhostPreviews();
         return;
       }
 
+      preferNewAudioLaneRef.current = false;
       const store = useTimelineStore.getState();
       const compositionById = useCompositionsStore.getState().compositionById;
       const composition = compositionById[data.compositionId];
@@ -533,11 +603,12 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
         clearTrackGhostPreviews();
         return;
       }
+      const existingIds = new Set(store.tracks.map((t) => t.id));
       previews.push(
         ...buildGhostPreviewsFromTrackMediaDropPlan({
           plannedItems: [plannedItem],
           frameToPixels,
-          existingTrackIds: new Set(store.tracks.map((t) => t.id)),
+          existingTrackIds: existingIds,
           dropTargetTrackId: track.id,
         }).map((preview) => ({
           ...preview,
@@ -550,6 +621,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
     }
 
     if (data.type === 'timeline-template') {
+      preferNewAudioLaneRef.current = false;
       const previews = buildGhostPreviewForTemplate(data, dropFrame);
       if (previews.length === 0) {
         e.dataTransfer.dropEffect = 'none';
@@ -569,6 +641,9 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
       }
 
       const mediaById = new Map(getMedia.map((media) => [media.id, media]));
+      const audioOnlyBatch = validItems.length > 0 && validItems.every((item) => item.mediaType === 'audio');
+      const preferNew = computePreferNewAudioLaneFromPointer(e.clientY, track, trackRef.current, audioOnlyBatch);
+      preferNewAudioLaneRef.current = preferNew;
       const nextPreviews = buildGhostPreviewsForEntries(
         validItems.map((item) => ({
           label: item.fileName,
@@ -576,7 +651,8 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
           duration: item.duration,
           hasLinkedAudio: item.mediaType === 'video' && !!mediaById.get(item.mediaId)?.audioCodec,
         })),
-        dropFrame
+        dropFrame,
+        preferNew,
       );
       if (nextPreviews.length === 0) {
         e.dataTransfer.dropEffect = 'none';
@@ -595,6 +671,13 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
       }
 
       const itemDuration = getDroppedMediaDurationInFrames(media, data.mediaType, fps);
+      const preferNew = computePreferNewAudioLaneFromPointer(
+        e.clientY,
+        track,
+        trackRef.current,
+        data.mediaType === 'audio',
+      );
+      preferNewAudioLaneRef.current = preferNew;
       const nextPreviews = buildGhostPreviewsForEntries([
         {
           label: data.fileName,
@@ -602,7 +685,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
           duration: itemDuration / fps,
           hasLinkedAudio: data.mediaType === 'video' && !!media.audioCodec,
         },
-      ], dropFrame);
+      ], dropFrame, preferNew);
       if (nextPreviews.length === 0) {
         e.dataTransfer.dropEffect = 'none';
         setIsDragOver(false);
@@ -615,6 +698,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
+    preferNewAudioLaneRef.current = false;
     setIsDragOver(false);
     setIsExternalDragOver(false);
     clearTrackGhostPreviews();
@@ -623,6 +707,8 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
+    const preferNewAudioLane = preferNewAudioLaneRef.current;
+    preferNewAudioLaneRef.current = false;
     setIsDragOver(false);
     setIsExternalDragOver(false);
     clearTrackGhostPreviews();
@@ -641,6 +727,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
       dataTransfer: e.dataTransfer,
       dropFrame,
       dropTargetTrackId: track.id,
+      preferNewAudioLane,
     });
   };
 
@@ -651,6 +738,30 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+    {!isDropDisabled && previewAboveGhosts.length > 0 && (
+      <div
+        data-ephemeral-video-lane
+        className="relative"
+        style={{
+          height: `${track.height}px`,
+          contain: 'layout style',
+        }}
+      >
+        <div className="pointer-events-none absolute inset-0 z-10 rounded border border-dashed border-timeline-video/60 bg-timeline-video/10" />
+        {previewAboveGhosts.map((ghost, index) => (
+          <div
+            key={`above-${index}`}
+            className={ghostPreviewPillClassName(ghost.type)}
+            style={{
+              left: `${ghost.left}px`,
+              width: `${ghost.width}px`,
+            }}
+          >
+            <span className="text-xs text-foreground/70 truncate">{ghost.label}</span>
+          </div>
+        ))}
+      </div>
+    )}
     <ContextMenu key={menuKey} modal={false}>
       <ContextMenuTrigger asChild disabled={track.locked}>
         <div
@@ -673,6 +784,7 @@ export const TimelineTrack = memo(function TimelineTrack({ track }: TimelineTrac
             !isExternalDragOver &&
             ghostPreviews.length === 0 &&
             previewBelowGhosts.length === 0 &&
+            previewAboveGhosts.length === 0 &&
             !activeGhostsTargetOnlyOtherTracks && (
             <div className="absolute inset-0 pointer-events-none z-10 rounded border border-dashed border-primary/50 bg-primary/10" />
           )}

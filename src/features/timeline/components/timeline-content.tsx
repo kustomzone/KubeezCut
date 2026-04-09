@@ -1010,6 +1010,38 @@ export const TimelineContent = memo(function TimelineContent({
     });
   }, [getSurfaceDropFrame, resolveTargetTrackIdForSurfaceDrop]);
 
+  /** Padded / flex slack below the scroll section: no lane owns that hit target, but drops should still land. */
+  const handleTracksColumnDragOver = useCallback((e: React.DragEvent) => {
+    if (e.target !== e.currentTarget) return;
+    if (!timelineDragAcceptsMediaTypes(e)) return;
+    const targetTrackId = resolveTargetTrackIdForSurfaceDrop();
+    if (!targetTrackId || isTimelineTrackDropDisabled(targetTrackId)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, [resolveTargetTrackIdForSurfaceDrop]);
+
+  const handleTracksColumnDrop = useCallback(async (e: React.DragEvent) => {
+    if (e.target !== e.currentTarget) return;
+    e.preventDefault();
+    const targetTrackId = resolveTargetTrackIdForSurfaceDrop();
+    if (!targetTrackId) {
+      return;
+    }
+    const dropFrame = getSurfaceDropFrame(e);
+    if (dropFrame === null) {
+      return;
+    }
+    await executeTimelineMediaDrop({
+      dataTransfer: e.dataTransfer,
+      dropFrame,
+      dropTargetTrackId: targetTrackId,
+    });
+  }, [getSurfaceDropFrame, resolveTargetTrackIdForSurfaceDrop]);
+
   const singleSectionTracks = videoTracks.length > 0 ? videoTracks : audioTracks;
   const singleSectionKind = videoTracks.length > 0 ? 'video' : 'audio';
   const singleSectionHeight = videoTracks.length > 0 ? videoPaneHeight : audioPaneHeight;
@@ -1118,6 +1150,8 @@ export const TimelineContent = memo(function TimelineContent({
           contain: 'layout style paint',
           willChange: 'contents',
         }}
+        onDragOver={handleTracksColumnDragOver}
+        onDrop={handleTracksColumnDrop}
       >
         {hasTrackSections ? (
           <>

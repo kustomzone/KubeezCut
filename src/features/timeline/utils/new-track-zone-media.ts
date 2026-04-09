@@ -146,10 +146,10 @@ export function planNewTrackZonePlacements<T>(params: {
     let placements: NewTrackZonePlacement[];
 
     if (isVisualMedia) {
-      if (params.zone !== 'video' && !isVideoWithAudio) {
-        continue;
-      }
-
+      /**
+       * Audio-only timelines still render the bottom strip as `zone: 'audio'`. Visual media must
+       * spawn/use a video lane anyway — skipping here left drops with an empty plan (no lane).
+       */
       const primaryTrackId = ensureZoneTrack('video');
       if (!primaryTrackId) {
         continue;

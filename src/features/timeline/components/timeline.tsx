@@ -616,9 +616,29 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
       return;
     }
 
+    const track = tracks.find((t) => t.id === trackId);
+    if (track?.locked) {
+      return;
+    }
+
+    const itemIdsOnTrack = useItemsStore.getState().items
+      .filter((item) => item.trackId === trackId)
+      .map((item) => item.id);
+
+    if (itemIdsOnTrack.length > 0) {
+      useTimelineStore.getState().removeItems(itemIdsOnTrack);
+    }
+
+    const selection = useSelectionStore.getState();
+    const surviving = useItemsStore.getState().itemById;
+    const prunedSelection = selection.selectedItemIds.filter((id) => id in surviving);
+    if (prunedSelection.length !== selection.selectedItemIds.length) {
+      selection.selectItems(prunedSelection);
+    }
+
     removeTracks([trackId]);
 
-    const remainingTracks = tracks.filter((track) => track.id !== trackId);
+    const remainingTracks = tracks.filter((t) => t.id !== trackId);
     syncTrackSelectionAfterRemoval([trackId], remainingTracks[0]?.id ?? null);
   }, [removeTracks, syncTrackSelectionAfterRemoval, tracks]);
 

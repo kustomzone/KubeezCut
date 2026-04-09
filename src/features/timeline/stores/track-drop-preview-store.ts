@@ -7,6 +7,8 @@ export interface TrackDropGhostPreview {
   label: string;
   type: 'composition' | DroppableMediaType | 'external-file' | 'text' | 'shape' | 'adjustment';
   targetTrackId: string;
+  /** New video/image lane not in the store yet — draw ghost row above this classic track (e.g. audio-only). */
+  previewAboveTrackId?: string;
   previewBelowTrackId?: string;
 }
 
