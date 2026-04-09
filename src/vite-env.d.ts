@@ -2,9 +2,9 @@
 
 interface ImportMetaEnv {
   /**
-   * Browser API origin (skips `/api/kubeez` for JSON/SSE). Media downloads use `/api/kubeez/cdn/*`
-   * (same-origin) because media.kubeez.com typically has no CORS for browser fetch(). Self-host: proxy
-   * `/api/kubeez/cdn` → media and `/api/kubeez` → api (see vercel.json).
+   * Browser API origin (skips `/api/kubeez` for JSON/SSE). When unset, media uses same-origin
+   * `/api/kubeez/cdn/*` (see vercel.json / nginx). When set (e.g. editor.kubeez.com prod), media is
+   * fetched from `https://media.kubeez.com` — that origin must allow CORS + CORP for the editor.
    */
   readonly VITE_KUBEEZ_BROWSER_API_URL?: string;
 }

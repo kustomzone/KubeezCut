@@ -168,3 +168,33 @@ describe('rewriteKubeezUrlForSameOriginFetch', () => {
     );
   });
 });
+
+describe('rewriteKubeezUrlForSameOriginFetch (VITE_KUBEEZ_BROWSER_API_URL direct CDN)', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_KUBEEZ_BROWSER_API_URL', 'https://api.kubeez.com');
+    vi.stubGlobal('window', { location: { origin: 'https://editor.kubeez.com' } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps absolute media.kubeez.com URLs for cross-origin fetch (requires CDN CORS + CORP)', () => {
+    expect(rewriteKubeezUrlForSameOriginFetch('https://media.kubeez.com/images/foo.jpg?q=1')).toBe(
+      'https://media.kubeez.com/images/foo.jpg?q=1'
+    );
+  });
+
+  it('expands root-relative CDN paths to https://media.kubeez.com', () => {
+    expect(rewriteKubeezUrlForSameOriginFetch('/images/c5c6f2dc-3a6f-45ba-8f6b-49a5fbf1dc46.jpg')).toBe(
+      'https://media.kubeez.com/images/c5c6f2dc-3a6f-45ba-8f6b-49a5fbf1dc46.jpg'
+    );
+  });
+
+  it('rewriteKubeezMediaCdnUrlForFetch yields https URL for protocol-relative media', () => {
+    expect(rewriteKubeezMediaCdnUrlForFetch('//media.kubeez.com/audio/a.mp3')).toBe(
+      'https://media.kubeez.com/audio/a.mp3'
+    );
+  });
+});

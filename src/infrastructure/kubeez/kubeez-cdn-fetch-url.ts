@@ -1,10 +1,12 @@
 /**
- * Browser `fetch()` stays same-origin for **media** (`media.kubeez.com` → `/api/kubeez/cdn/...`) so downloads
- * work without CDN CORS (Vite, nginx, Vercel). The **API** may use `VITE_KUBEEZ_BROWSER_API_URL` for direct
- * `api.kubeez.com` when that origin allows your editor; the CDN often does not, so we never fetch media cross-origin.
+ * Browser `fetch()` for **media**:
+ * - **Default:** `media.kubeez.com` → same-origin `/api/kubeez/cdn/...` (Vite, nginx, Vercel) so downloads work
+ *   without CDN CORS.
+ * - **Direct API mode** (`VITE_KUBEEZ_BROWSER_API_URL`, e.g. editor.kubeez.com on static hosting): keep
+ *   `https://media.kubeez.com/...` (and expand root-relative `/images/...` to that host). Requires
+ *   `Access-Control-Allow-Origin` and `Cross-Origin-Resource-Policy: cross-origin` on media.kubeez.com.
  *
- * CDN traffic is nested under `/api/kubeez/` so self-hosted setups can pair one `location /api/kubeez/` story:
- * map `/api/kubeez/cdn/` → media host, everything else → api host (see `vercel.json`).
+ * CDN proxy path is under `/api/kubeez/` for setups that map `/api/kubeez/cdn/` → media (see `vercel.json`).
  */
 
 /** Must match `vite.config` proxy + production reverse-proxy paths. */
@@ -15,7 +17,7 @@ export const KUBEEZ_MEDIA_PROXY_PATH_PREFIX = '/api/kubeez/cdn';
 /** Legacy same-origin path (older deploys). Normalize to {@link KUBEEZ_MEDIA_PROXY_PATH_PREFIX} when seen. */
 const KUBEEZ_MEDIA_PROXY_LEGACY_PATH_PREFIX = '/api/kubeez-media';
 
-/** Build-time: non-empty → browser uses this origin for **API** JSON/SSE only; media still uses `/api/kubeez/cdn`. */
+/** Build-time: non-empty → browser uses this origin for **API** JSON/SSE; media fetches CDN URLs directly when set. */
 export function kubeezBrowserDirectApiOrigin(): string {
   const v = import.meta.env.VITE_KUBEEZ_BROWSER_API_URL;
   if (typeof v !== 'string') return '';
@@ -89,6 +91,9 @@ export function rewriteKubeezUrlForSameOriginFetch(url: string): string {
     return `${KUBEEZ_API_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
   }
   if (parsed.hostname === 'media.kubeez.com') {
+    if (kubeezPreferDirectKubeezHosts()) {
+      return parsed.href;
+    }
     return `${KUBEEZ_MEDIA_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
   }
 
