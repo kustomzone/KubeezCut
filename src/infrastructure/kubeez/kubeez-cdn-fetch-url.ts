@@ -1,13 +1,23 @@
 /**
- * Browser `fetch()` must stay same-origin so Vite (`/api/kubeez`, `/api/kubeez-media`) and Vercel
- * rewrites apply — same pattern as `resolveKubeezApiBaseUrl` for API calls.
- * Kubeez often returns absolute `https://api.kubeez.com/...` or `https://media.kubeez.com/...`, or
- * root-relative `/images/...` that must not hit the dev server root (404).
+ * Browser `fetch()` usually stays same-origin via `/api/kubeez` and `/api/kubeez-media` (Vite, reverse
+ * proxy, or Vercel). With `VITE_KUBEEZ_BROWSER_API_URL`, Kubeez host URLs stay absolute for self-hosted
+ * editors without that proxy (requires CORS on api/media for your editor origin).
  */
 
-/** Must match `vite.config` proxy + `vercel.json` rewrites. */
+/** Must match `vite.config` proxy + production reverse-proxy paths. */
 export const KUBEEZ_API_PROXY_PATH_PREFIX = '/api/kubeez';
 export const KUBEEZ_MEDIA_PROXY_PATH_PREFIX = '/api/kubeez-media';
+
+/** Build-time: non-empty → browser calls this origin for API; CDN rewrite keeps absolute kubeez hosts. */
+export function kubeezBrowserDirectApiOrigin(): string {
+  const v = import.meta.env.VITE_KUBEEZ_BROWSER_API_URL;
+  if (typeof v !== 'string') return '';
+  return v.trim().replace(/\/$/, '');
+}
+
+function kubeezPreferDirectKubeezHosts(): boolean {
+  return kubeezBrowserDirectApiOrigin().length > 0;
+}
 
 function pathWithQueryAndHash(u: URL): string {
   return `${u.pathname}${u.search}${u.hash}`;
@@ -66,10 +76,10 @@ export function rewriteKubeezUrlForSameOriginFetch(url: string): string {
     /* ignore */
   }
 
-  if (parsed.hostname === 'api.kubeez.com') {
+  if (parsed.hostname === 'api.kubeez.com' && !kubeezPreferDirectKubeezHosts()) {
     return `${KUBEEZ_API_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
   }
-  if (parsed.hostname === 'media.kubeez.com') {
+  if (parsed.hostname === 'media.kubeez.com' && !kubeezPreferDirectKubeezHosts()) {
     return `${KUBEEZ_MEDIA_PROXY_PATH_PREFIX}${parsed.pathname}${parsed.search}${parsed.hash}`;
   }
 

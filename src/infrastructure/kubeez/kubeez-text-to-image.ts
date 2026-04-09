@@ -1,5 +1,6 @@
 import {
   KUBEEZ_API_PROXY_PATH_PREFIX,
+  kubeezBrowserDirectApiOrigin,
   rewriteKubeezMediaCdnUrlForFetch,
 } from '@/infrastructure/kubeez/kubeez-cdn-fetch-url';
 import { readKubeezSseUntilResult } from '@/infrastructure/kubeez/kubeez-sse';
@@ -8,19 +9,27 @@ import { createLogger } from '@/shared/logging/logger';
 
 const logger = createLogger('Kubeez');
 
-/** Same-origin proxy (see vite.config + vercel.json). Direct https://api.kubeez.com hits CORS in the browser. */
+/** Same-origin API prefix when using a reverse proxy (default). See `VITE_KUBEEZ_BROWSER_API_URL` for direct API. */
 export const KUBEEZ_BROWSER_PROXY_BASE = KUBEEZ_API_PROXY_PATH_PREFIX;
 export const KUBEEZ_MODEL_NANO_BANANA_2 = 'nano-banana-2';
 
 /**
- * Resolves API base for fetch(). Empty, default proxy, or https://api.kubeez.com → same-origin proxy in the browser.
+ * Resolves API base for `fetch()`.
+ *
+ * - **Default (browser):** same-origin `/api/kubeez` (Vite proxy or your nginx / edge rewrites).
+ * - **`VITE_KUBEEZ_BROWSER_API_URL`:** e.g. `https://api.kubeez.com` for self-hosted editors (Hetzner, etc.)
+ *   without `/api/kubeez` proxy — needs CORS on the Kubeez API for your editor origin.
+ * - Same-origin settings URL that is **not** `/api/kubeez` (e.g. editor homepage) → uses default base above
+ *   so `POST …/v1/generate/media` does not hit the static app (405).
  */
 export function resolveKubeezApiBaseUrl(configured: string | undefined): string {
   const trimmed = (configured ?? '').trim();
   const proxy = KUBEEZ_BROWSER_PROXY_BASE.replace(/\/$/, '');
+  const direct = kubeezBrowserDirectApiOrigin();
+  const browserDefault = direct || proxy;
 
   if (typeof window === 'undefined') {
-    return trimmed || proxy;
+    return trimmed || browserDefault;
   }
 
   // Same-origin absolute URLs (e.g. http://localhost:5173/api/kubeez) → relative `/api/kubeez`
@@ -33,6 +42,8 @@ export function resolveKubeezApiBaseUrl(configured: string | undefined): string 
         if (path === proxy || path.startsWith(`${proxy}/`)) {
           return proxy;
         }
+        // Same host as the app but not the API proxy (e.g. https://editor…/ pasted as base).
+        return browserDefault;
       }
     } catch {
       /* ignore */
@@ -40,13 +51,13 @@ export function resolveKubeezApiBaseUrl(configured: string | undefined): string 
   }
 
   if (!trimmed || trimmed === proxy || trimmed === `${proxy}/`) {
-    return proxy;
+    return browserDefault;
   }
 
   try {
     const u = new URL(trimmed, window.location.origin);
     if (u.origin === 'https://api.kubeez.com') {
-      return proxy;
+      return direct ? trimmed.replace(/\/$/, '') : proxy;
     }
   } catch {
     /* relative e.g. /api/kubeez */
@@ -54,6 +65,10 @@ export function resolveKubeezApiBaseUrl(configured: string | undefined): string 
 
   return trimmed.replace(/\/$/, '');
 }
+
+/** Appended when POST /v1/generate/* returns 405 (SPA/static host). Shared by media, music, dialogue. */
+export const KUBEEZ_CLIENT_HTTP_405_HINT =
+  ' (405: API POST hit the wrong route. Use nginx /api/kubeez → api.kubeez.com (see deploy/), set VITE_KUBEEZ_BROWSER_API_URL=https://api.kubeez.com, or leave defaults: production builds for editor.kubeez.com infer direct API when that env is unset.)';
 
 /** After the first immediate poll, use this interval while the job is likely still in flight. */
 const POLL_INTERVAL_FAST_MS = 1000;
@@ -414,7 +429,7 @@ export async function generateKubeezMediaBlob(params: GenerateTextToImageParams)
   const startBody = await parseJsonResponse(startRes);
   if (!startRes.ok) {
     const msg = extractErrorMessage(startBody) ?? `Kubeez request failed (${startRes.status})`;
-    throw new Error(msg);
+    throw new Error(msg + (startRes.status === 405 ? KUBEEZ_CLIENT_HTTP_405_HINT : ''));
   }
 
   const generationId = extractGenerationId(startBody);

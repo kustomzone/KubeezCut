@@ -11,6 +11,34 @@ function resolvePublicSiteUrl(mode: string): string {
   return raw.replace(/\/+$/, '')
 }
 
+/**
+ * Production builds for editor.kubeez.com infer `VITE_KUBEEZ_BROWSER_API_URL=https://api.kubeez.com`
+ * when that env is unset (Hetzner static hosting without /api/kubeez nginx). Override in `.env.production`
+ * or nginx proxy (see deploy/nginx-kubeez-proxy.snippet.conf). Other hosts keep same-origin /api/kubeez.
+ */
+function kubeezBrowserApiEnvDefine(mode: string): Record<string, string> {
+  const env = loadEnv(mode, process.cwd(), '')
+  if (env.VITE_KUBEEZ_BROWSER_API_URL !== undefined) {
+    return {}
+  }
+  if (mode !== 'production') {
+    return {}
+  }
+  const siteUrl = env.VITE_PUBLIC_SITE_URL || 'https://editor.kubeez.com'
+  let host: string
+  try {
+    host = new URL(siteUrl.replace(/\/+$/, '')).hostname
+  } catch {
+    return {}
+  }
+  if (host !== 'editor.kubeez.com' && !host.endsWith('.editor.kubeez.com')) {
+    return {}
+  }
+  return {
+    'import.meta.env.VITE_KUBEEZ_BROWSER_API_URL': JSON.stringify('https://api.kubeez.com'),
+  }
+}
+
 /** Replaces %SITE_URL% in index.html; writes robots.txt + sitemap.xml on production build. */
 function seoPlugin(siteUrl: string): Plugin {
   let outDir = 'dist'
@@ -46,6 +74,7 @@ function seoPlugin(siteUrl: string): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: kubeezBrowserApiEnvDefine(mode),
   plugins: [react(), tailwindcss(), seoPlugin(resolvePublicSiteUrl(mode))],
   resolve: {
     alias: {

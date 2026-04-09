@@ -41,7 +41,7 @@ interface AppSettings {
 
   /** Kubeez API key for generate-from-editor (optional) */
   kubeezApiKey: string;
-  /** Optional Kubeez API base URL override */
+  /** Override for unusual API hosts; normally empty (same-origin `/api/kubeez` or build `VITE_KUBEEZ_BROWSER_API_URL`). */
   kubeezApiBaseUrl: string;
   // Whisper defaults
   defaultWhisperModel: MediaTranscriptModel;

@@ -3,7 +3,7 @@ import { extractKubeezPollStatus, isKubeezPlainObject } from '@/infrastructure/k
 import { readKubeezSseUntilResult } from '@/infrastructure/kubeez/kubeez-sse';
 import { createLogger } from '@/shared/logging/logger';
 import { DEFAULT_VOICE_ID, TEXT_TO_DIALOGUE_VOICES } from '@/infrastructure/kubeez/kubeez-dialogue-voices';
-import { resolveKubeezApiBaseUrl } from './kubeez-text-to-image';
+import { KUBEEZ_CLIENT_HTTP_405_HINT, resolveKubeezApiBaseUrl } from './kubeez-text-to-image';
 
 const logger = createLogger('KubeezAudio');
 
@@ -561,7 +561,7 @@ export async function generateKubeezMusicFiles(
   const startBody = await parseJsonResponse(startRes);
   if (!startRes.ok) {
     const msg = extractErrorMessage(startBody) ?? `Kubeez music request failed (${startRes.status})`;
-    throw new Error(msg);
+    throw new Error(msg + (startRes.status === 405 ? KUBEEZ_CLIENT_HTTP_405_HINT : ''));
   }
 
   const immediate = await tryResolveMusicCompletionPayload(startBody, signal);
@@ -652,7 +652,7 @@ export async function generateKubeezDialogueBlob(params: GenerateKubeezDialogueP
   const startBody = await parseJsonResponse(startRes);
   if (!startRes.ok) {
     const msg = extractErrorMessage(startBody) ?? `Kubeez dialogue request failed (${startRes.status})`;
-    throw new Error(msg);
+    throw new Error(msg + (startRes.status === 405 ? KUBEEZ_CLIENT_HTTP_405_HINT : ''));
   }
 
   const immediateUrl = firstAudioOutputUrl(startBody);
