@@ -2,12 +2,12 @@ import { rewriteKubeezMediaCdnUrlForFetch } from '@/infrastructure/kubeez/kubeez
 import { extractKubeezPollStatus, isKubeezPlainObject } from '@/infrastructure/kubeez/kubeez-poll-status';
 import { readKubeezSseUntilResult } from '@/infrastructure/kubeez/kubeez-sse';
 import { createLogger } from '@/shared/logging/logger';
-import { DEFAULT_VOICE_ID, TEXT_TO_DIALOGUE_VOICES } from '@kubeez-website/data/textToDialogueVoices';
+import { DEFAULT_VOICE_ID, TEXT_TO_DIALOGUE_VOICES } from '@/infrastructure/kubeez/kubeez-dialogue-voices';
 import { resolveKubeezApiBaseUrl } from './kubeez-text-to-image';
 
 const logger = createLogger('KubeezAudio');
 
-/** Voice ids/labels aligned with KubeezWebsite `textToDialogueVoices.ts` (Kie ElevenLabs dialogue v3). */
+/** Voice ids/labels from `kubeez-dialogue-voices.ts` (ElevenLabs / Kie text-to-dialogue style). */
 export const KUBEEZ_DIALOGUE_VOICE_OPTIONS: { id: string; label: string }[] = TEXT_TO_DIALOGUE_VOICES.map(
   ({ id, label }) => ({ id, label })
 );
