@@ -229,10 +229,16 @@ function hasFailedOutputOptimization(data: unknown): boolean {
 }
 
 /**
- * OpenAPI: `cdn_ready` on the job and/or per output. Do not fetch until not explicitly false.
- * Live API often sets `cdn_ready` on the root object only (see poll JSON).
+ * OpenAPI: `cdn_ready` on the job and/or per output. When URLs are still null, wait for CDN.
+ *
+ * Important: some responses expose a fetchable `https://media.kubeez.com/...` URL while a nested
+ * `cdn_ready` flag is still `false`. Treat "has URL" as ready so we actually run the download.
  */
 function outputsAwaitingCdn(data: unknown): boolean {
+  const hasUrl =
+    firstOutputMediaUrl(data, 'video') ?? firstOutputMediaUrl(data, 'image');
+  if (hasUrl) return false;
+
   for (const o of collectMediaRoots(data)) {
     if (o.cdn_ready === false) return true;
     const outputs = o.outputs ?? o.media_outputs;
@@ -323,13 +329,19 @@ async function finalizeMediaGenerationFromStatus(
     const fetchUrl = rewriteKubeezMediaCdnUrlForFetch(mediaUrl);
     const mediaRes = await fetch(fetchUrl, { mode: 'cors', signal });
     if (mediaRes.ok) {
-      const ct = (mediaRes.headers.get('content-type') ?? '').toLowerCase();
+      const rawCt = mediaRes.headers.get('content-type');
+      const ct = (rawCt ?? '').toLowerCase();
       if (ct.includes('text/html')) {
         throw new Error(
           'Media download returned HTML (CDN proxy misconfigured). Map GET /api/kubeez/cdn/* to https://media.kubeez.com/* before /api/kubeez → api (see vercel.json).'
         );
       }
-      return mediaRes.blob();
+      const blob = await mediaRes.blob();
+      const mime = rawCt?.split(';')[0]?.trim();
+      if (mime && !blob.type) {
+        return new Blob([blob], { type: mime });
+      }
+      return blob;
     }
     if (mediaRes.status === 404 && d < MEDIA_DOWNLOAD_RETRIES - 1) {
       await sleep(MEDIA_DOWNLOAD_RETRY_MS, signal);
