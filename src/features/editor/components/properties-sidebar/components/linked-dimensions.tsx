@@ -103,6 +103,7 @@ export function LinkedDimensions({
       />
 
       <Button
+        type="button"
         variant="ghost"
         size="icon"
         className={cn(
@@ -111,6 +112,9 @@ export function LinkedDimensions({
         )}
         onClick={onAspectLockToggle}
         disabled={disabled}
+        title={aspectLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+        aria-pressed={aspectLocked}
+        aria-label={aspectLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
       >
         {aspectLocked ? (
           <Link2 className="w-3.5 h-3.5" />

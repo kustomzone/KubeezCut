@@ -7,6 +7,11 @@ interface InteractionLockRegionProps {
   className?: string;
   overlayClassName?: string;
   style?: CSSProperties;
+  /**
+   * Fill parent height with a flex column (editor side panels, timeline, preview splits).
+   * When false, the wrapper sizes to its children (e.g. toolbar).
+   */
+  fillHeight?: boolean;
 }
 
 /**
@@ -19,16 +24,22 @@ export function InteractionLockRegion({
   className,
   overlayClassName,
   style,
+  fillHeight = false,
 }: InteractionLockRegionProps) {
   return (
     <div
-      className={cn('relative min-h-0', className)}
+      className={cn(
+        fillHeight
+          ? 'relative flex h-full min-h-0 w-full flex-col'
+          : 'relative min-h-0',
+        className
+      )}
       data-interaction-locked={locked ? 'true' : 'false'}
       style={style}
     >
       <div
         className={cn(
-          'h-full min-h-0',
+          fillHeight ? 'flex min-h-0 flex-1 flex-col' : 'h-full min-h-0',
           locked ? 'pointer-events-none select-none opacity-60' : undefined
         )}
       >

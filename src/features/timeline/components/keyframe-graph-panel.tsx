@@ -1259,8 +1259,21 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
   const showBezierControls = selectedEditorEasing === 'cubic-bezier';
   const showSpringControls = selectedEditorEasing === 'spring';
   const showAdvancedControls = showBezierControls || showSpringControls;
-  const layoutBoxHeight =
-    isSidebarDock && containerInnerHeight > 0 ? containerInnerHeight : clampedContentHeight;
+  // Sidebar dock: `contentHeight` stays at MIN_CONTENT_HEIGHT (bottom-dock init is skipped), so
+  // `clampedContentHeight` is ~100px until resize — that made `editorHeight` tiny. Prefer the
+  // measured inner container; before that, derive height from the parent flex slot (same region
+  // as other sidebar tabs) instead of the bottom-dock fallback.
+  const sidebarContentHeightFromParent =
+    isSidebarDock && parentHeight > 0
+      ? Math.max(MIN_CONTENT_HEIGHT, parentHeight - GRAPH_PANEL_HEADER_HEIGHT)
+      : 0;
+  const layoutBoxHeight = isSidebarDock
+    ? containerInnerHeight > 0
+      ? containerInnerHeight
+      : sidebarContentHeightFromParent > 0
+        ? sidebarContentHeightFromParent
+        : clampedContentHeight
+    : clampedContentHeight;
   const editorHeight = Math.max(
     0,
     layoutBoxHeight - 16 - advancedControlsHeight - (showAdvancedControls ? 8 : 0)
@@ -1440,7 +1453,10 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
       {isOpen && (
         <div
           ref={containerRef}
-          className={cn('flex min-h-0 flex-col p-2', isSidebarDock && 'flex-1')}
+          className={cn(
+            'flex min-h-0 flex-col p-2',
+            isSidebarDock && 'min-h-0 flex-1 overflow-auto'
+          )}
           style={isSidebarDock ? undefined : { height: clampedContentHeight }}
         >
           {showAdvancedControls && (
@@ -1588,7 +1604,7 @@ export const KeyframeGraphPanel = memo(function KeyframeGraphPanel({
               />
             </ErrorBoundary>
           ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+            <div className="flex w-full flex-1 items-center justify-center rounded-md border border-border bg-muted/15 text-muted-foreground text-sm">
               {selectedItemForEditor ? 'Loading...' : 'Select an item to view the editor'}
             </div>
           )}

@@ -29,6 +29,9 @@ import {
   type KubeezModelGridItem,
 } from '@/infrastructure/kubeez/kubeez-video-model-variants';
 import { Link } from '@tanstack/react-router';
+import { SETTINGS_KUBEEZ_API_LINK_PROPS } from '@/routes/settings';
+import { markKubeezGenerateReopenAfterSettings } from '@/shared/state/kubeez-generate-dialog';
+import { useProjectStore } from '@/features/projects/stores/project-store';
 import { Check, Clapperboard, ImageIcon, LayoutGrid, Loader2, Mic, Music2, Search } from 'lucide-react';
 import { cn } from '@/shared/ui/cn';
 
@@ -1579,6 +1582,11 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
   busy,
   modelsLoading,
 }: KubeezGenerateModelsColumnProps) {
+  const currentProjectId = useProjectStore((s) => s.currentProject?.id);
+  const markReopenGenerateAfterSettings = () => {
+    if (currentProjectId) markKubeezGenerateReopenAfterSettings(currentProjectId);
+  };
+
   const [modelSearch, setModelSearch] = useState('');
   const searchNeedle = modelSearch.trim();
 
@@ -1632,8 +1640,21 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
     <div className="flex min-h-0 max-h-[min(42vh,320px)] flex-1 flex-col border-b border-border pb-4 lg:max-h-none lg:min-h-0 lg:min-w-0 lg:border-b-0 lg:border-r lg:border-border/60 lg:pb-0 lg:pr-4">
       {missingKey && (
         <p className="mb-2 shrink-0 text-sm text-muted-foreground">
-          Browse the full Kubeez catalog below (same models as kubeez.com). Add an API key in{' '}
-          <Link to="/settings" className="text-primary underline underline-offset-2">
+          Browse the full Kubeez catalog below (same as on{' '}
+          <a
+            href="https://kubeez.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2"
+          >
+            kubeez.com
+          </a>
+          ). Get an API key there, then add it in{' '}
+          <Link
+            {...SETTINGS_KUBEEZ_API_LINK_PROPS}
+            onClick={markReopenGenerateAfterSettings}
+            className="text-primary underline underline-offset-2"
+          >
             Settings
           </Link>{' '}
           to sync live models from the API and generate.

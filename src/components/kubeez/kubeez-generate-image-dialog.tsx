@@ -59,6 +59,7 @@ import {
   KUBEEZ_SPEECH_DIALOGUE_MODEL,
   type KubeezMediaModelOption,
 } from '@/infrastructure/kubeez/kubeez-models';
+import { readKubeezGroupedModelsCache } from '@/infrastructure/kubeez/kubeez-models-cache';
 
 const KUBEEZ_OFFLINE_BROWSE = getKubeezOfflineBrowseCatalog();
 import type { KubeezModelSettings } from '@/infrastructure/kubeez/model-family-registry';
@@ -84,14 +85,36 @@ import {
 import type { MediaMetadata } from '@/types/storage';
 import { toast } from 'sonner';
 import { createLogger } from '@/shared/logging/logger';
-import { Film, Image as ImageIcon, Paperclip, Video, X } from 'lucide-react';
+import { Film, Image as ImageIcon, Info, Paperclip, Video, X } from 'lucide-react';
 import { cn } from '@/shared/ui/cn';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { SETTINGS_KUBEEZ_API_LINK_PROPS } from '@/routes/settings';
+import { markKubeezGenerateReopenAfterSettings } from '@/shared/state/kubeez-generate-dialog';
 
 const logger = createLogger('KubeezGenerateDialog');
 
 const ASPECT_OPTIONS = ['1:1', '16:9', '9:16', '4:3', '3:4'] as const;
 
 const DEFAULT_MODEL_ID = 'nano-banana-2';
+
+function pickSelectedModelIdAfterGroupedLoad(
+  prev: string,
+  imageModels: KubeezMediaModelOption[],
+  videoModels: KubeezMediaModelOption[],
+  musicModels: KubeezMediaModelOption[]
+): string {
+  const flat = [...imageModels, ...videoModels, ...musicModels, KUBEEZ_SPEECH_DIALOGUE_MODEL];
+  if (flat.some((m) => m.model_id === prev)) return prev;
+  const preferred = imageModels.find((m) => m.model_id === DEFAULT_MODEL_ID);
+  return (
+    preferred?.model_id ??
+    imageModels[0]?.model_id ??
+    videoModels[0]?.model_id ??
+    musicModels[0]?.model_id ??
+    KUBEEZ_SPEECH_DIALOGUE_MODEL.model_id ??
+    prev
+  );
+}
 
 const MOTION_IMAGE_ACCEPT = KUBEEZ_ACCEPTED_REFERENCE_IMAGE_TYPES.join(',');
 const MOTION_VIDEO_ACCEPT = KUBEEZ_ACCEPTED_REFERENCE_VIDEO_TYPES.join(',');
@@ -113,9 +136,14 @@ export function KubeezGenerateImageDialog({
   onOpenChange,
   timelinePlacement,
 }: KubeezGenerateImageDialogProps) {
+  const navigate = useNavigate();
   const kubeezApiKey = useSettingsStore((s) => s.kubeezApiKey);
   const kubeezApiBaseUrl = useSettingsStore((s) => s.kubeezApiBaseUrl);
   const currentProject = useProjectStore((s) => s.currentProject);
+  const markReopenGenerateAfterSettings = () => {
+    const id = currentProject?.id;
+    if (id) markKubeezGenerateReopenAfterSettings(id);
+  };
   const fps = useTimelineStore((s) => s.fps);
 
   const promptRef = useRef('');
@@ -573,7 +601,32 @@ export function KubeezGenerateImageDialog({
     const ac = new AbortController();
     let cancelled = false;
 
-    setModelsLoading(true);
+    let hydratedFromCache = false;
+    const rawCache = readKubeezGroupedModelsCache();
+    if (rawCache) {
+      const filteredImage = filterKubeezCutCatalogModels(rawCache.imageModels);
+      const filteredVideo = filterKubeezCutCatalogModels(rawCache.videoModels);
+      const filteredMusic = filterKubeezCutCatalogModels(rawCache.musicModels);
+      const hasAnyModels =
+        filteredImage.length > 0 || filteredVideo.length > 0 || filteredMusic.length > 0;
+      if (hasAnyModels) {
+        hydratedFromCache = true;
+        const imageModels =
+          filteredImage.length > 0 ? filteredImage : [...KUBEEZ_OFFLINE_BROWSE.imageModels];
+        const videoModels = filteredVideo;
+        const musicModels =
+          filteredMusic.length > 0 ? filteredMusic : [...KUBEEZ_OFFLINE_BROWSE.musicModels];
+        setImageModels(imageModels);
+        setVideoModels(videoModels);
+        setMusicModels(musicModels);
+        setSelectedModelId((prev) =>
+          pickSelectedModelIdAfterGroupedLoad(prev, imageModels, videoModels, musicModels)
+        );
+      }
+    }
+
+    // Instant UI from localStorage cache; only block the grid on first load with no cache.
+    setModelsLoading(!hydratedFromCache);
 
     fetchKubeezGroupedMediaModels({
       apiKey,
@@ -591,24 +644,14 @@ export function KubeezGenerateImageDialog({
         setDialogueLanguage('auto');
         setDialogueStability('0.5');
 
-        setSelectedModelId((prev) => {
-          const flat = [
-            ...result.imageModels,
-            ...result.videoModels,
-            ...result.musicModels,
-            KUBEEZ_SPEECH_DIALOGUE_MODEL,
-          ];
-          if (flat.some((m) => m.model_id === prev)) return prev;
-          const preferred = result.imageModels.find((m) => m.model_id === DEFAULT_MODEL_ID);
-          return (
-            preferred?.model_id ??
-            result.imageModels[0]?.model_id ??
-            result.videoModels[0]?.model_id ??
-            result.musicModels[0]?.model_id ??
-            KUBEEZ_SPEECH_DIALOGUE_MODEL.model_id ??
-            prev
-          );
-        });
+        setSelectedModelId((prev) =>
+          pickSelectedModelIdAfterGroupedLoad(
+            prev,
+            result.imageModels,
+            result.videoModels,
+            result.musicModels
+          )
+        );
       })
       .catch((e) => {
         if (cancelled || (e instanceof DOMException && e.name === 'AbortError')) return;
@@ -657,7 +700,8 @@ export function KubeezGenerateImageDialog({
         action: {
           label: 'Open Settings',
           onClick: () => {
-            window.location.href = '/settings';
+            markReopenGenerateAfterSettings();
+            void navigate({ ...SETTINGS_KUBEEZ_API_LINK_PROPS });
           },
         },
       });
@@ -1169,7 +1213,7 @@ export function KubeezGenerateImageDialog({
           data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-3
           motion-reduce:duration-150 motion-reduce:data-[state=open]:slide-in-from-bottom-0 motion-reduce:data-[state=closed]:slide-out-to-bottom-0 motion-reduce:data-[state=open]:zoom-in-100 motion-reduce:data-[state=closed]:zoom-out-100"
       >
-        <div className="shrink-0 border-b border-border/60 bg-gradient-to-r from-muted/40 via-muted/20 to-transparent px-4 py-3 sm:px-5">
+        <div className="shrink-0 space-y-3 border-b border-border/80 bg-muted/25 px-4 py-3 sm:px-5">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/90 p-1.5 shadow-inner shadow-black/20">
               <img
@@ -1182,8 +1226,8 @@ export function KubeezGenerateImageDialog({
               />
             </div>
             <DialogHeader className="flex-1 space-y-1 text-left">
-              <DialogTitle className="text-base leading-tight">Generate media</DialogTitle>
-              <DialogDescription className="text-xs leading-snug">
+              <DialogTitle className="text-base font-semibold leading-tight">Generate media</DialogTitle>
+              <DialogDescription className="text-xs leading-snug text-muted-foreground">
                 {libraryOnly ? (
                   <>
                     Powered by Kubeez. New media is saved to this project&apos;s library; drag clips to the timeline
@@ -1198,6 +1242,42 @@ export function KubeezGenerateImageDialog({
               </DialogDescription>
             </DialogHeader>
           </div>
+
+          {missingKey && (
+            <div
+              className="flex gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2.5 shadow-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <Info
+                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-medium text-foreground">Add a Kubeez API key</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Keys are created on{' '}
+                  <a
+                    href="https://kubeez.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground underline underline-offset-2 hover:text-primary"
+                  >
+                    kubeez.com
+                  </a>
+                  . Paste it in{' '}
+                  <Link
+                    {...SETTINGS_KUBEEZ_API_LINK_PROPS}
+                    onClick={markReopenGenerateAfterSettings}
+                    className="text-foreground underline underline-offset-2 hover:text-primary"
+                  >
+                    Settings
+                  </Link>{' '}
+                  (Kubeez) to sync models and generate.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden px-4 py-3 sm:px-5 lg:flex-row lg:items-stretch">

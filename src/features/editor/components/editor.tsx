@@ -19,7 +19,10 @@ import { Timeline, BentoLayoutDialog } from '@/features/editor/deps/timeline-ui'
 import { ClearKeyframesDialog } from './clear-keyframes-dialog';
 import { TtsGenerateDialog } from './tts-generate-dialog';
 import { KubeezGenerateImageDialog } from '@/components/kubeez/kubeez-generate-image-dialog';
-import { useKubeezGenerateDialogStore } from '@/shared/state/kubeez-generate-dialog';
+import {
+  consumeKubeezGenerateReopenAfterSettings,
+  useKubeezGenerateDialogStore,
+} from '@/shared/state/kubeez-generate-dialog';
 import { toast } from 'sonner';
 import { useEditorHotkeys } from '@/features/editor/hooks/use-editor-hotkeys';
 import { useAutoSave } from '../hooks/use-auto-save';
@@ -192,10 +195,17 @@ export const LoadedEditor = memo(function LoadedEditor({
   const maxItemEndFrame = useItemsStore((s) => s.maxItemEndFrame);
   const timelineDurationSeconds = Math.max(maxItemEndFrame / Math.max(fps, 1), 10);
   const kubeezGenerateOpen = useKubeezGenerateDialogStore((s) => s.isOpen);
+  const openKubeezGenerate = useKubeezGenerateDialogStore((s) => s.open);
   const closeKubeezGenerate = useKubeezGenerateDialogStore((s) => s.close);
   const hasRefreshedMigrationStateRef = useRef(false);
   const toolsPanelRef = useRef<ImperativePanelHandle>(null);
   const propertiesPanelRef = useRef<ImperativePanelHandle>(null);
+
+  useLayoutEffect(() => {
+    if (consumeKubeezGenerateReopenAfterSettings(projectId)) {
+      openKubeezGenerate();
+    }
+  }, [projectId, openKubeezGenerate]);
 
   // Keep shell layout in sync: closing a sidebar collapses the ResizablePanel to 0,
   // not only hide inner content (otherwise an empty bordered column remains).
@@ -510,16 +520,16 @@ export const LoadedEditor = memo(function LoadedEditor({
                 defaultSize={panels.tools}
                 minSize={15}
                 maxSize={40}
-                className="min-w-0"
+                className="min-h-0 min-w-0"
                 onResize={syncToolsOpenFromResize}
               >
                 <div
                   className={cn(
-                    'panel bg-background flex h-full flex-col rounded-sm border',
+                    'panel bg-background flex h-full min-h-0 flex-col rounded-sm border',
                     leftSidebarOpen ? 'overflow-hidden' : 'overflow-visible border-0 bg-transparent shadow-none'
                   )}
                 >
-                  <InteractionLockRegion locked={isMaskEditingActive}>
+                  <InteractionLockRegion locked={isMaskEditingActive} fillHeight>
                     <ErrorBoundary level="feature">
                       <MediaSidebar fillContainer />
                     </ErrorBoundary>
@@ -571,7 +581,7 @@ export const LoadedEditor = memo(function LoadedEditor({
                     rightSidebarOpen ? 'overflow-hidden' : 'overflow-visible border-0 bg-transparent shadow-none'
                   )}
                 >
-                  <InteractionLockRegion locked={isMaskEditingActive}>
+                  <InteractionLockRegion locked={isMaskEditingActive} fillHeight>
                     <ErrorBoundary level="feature">
                       <PropertiesSidebar fillContainer />
                     </ErrorBoundary>
@@ -628,9 +638,9 @@ export const LoadedEditor = memo(function LoadedEditor({
             maxSize={70}
             className="min-h-0 px-3 pb-3"
           >
-            <InteractionLockRegion locked={isMaskEditingActive} className="h-full">
+            <InteractionLockRegion locked={isMaskEditingActive} fillHeight>
               <ErrorBoundary level="feature">
-                <div className="panel bg-background flex h-full flex-col overflow-hidden rounded-sm border">
+                <div className="panel bg-background flex h-full min-h-0 flex-col overflow-hidden rounded-sm border">
                   <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
                     <div className="min-w-0 flex-1 min-h-0">
                       <Timeline duration={timelineDurationSeconds} />

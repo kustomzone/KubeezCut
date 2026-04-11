@@ -98,12 +98,20 @@ const ColorPicker = memo(function ColorPicker({
  * Canvas properties panel - shown when no clip is selected.
  * Displays and allows editing of canvas dimensions and shows project duration.
  */
+const MIN_W = 320;
+const MIN_H = 240;
+const MAX_W = 7680;
+const MAX_H = 4320;
+
 export const CanvasPanel = memo(function CanvasPanel() {
   // Granular selectors
   const currentProject = useProjectStore((s) => s.currentProject);
   const updateProject = useProjectStore((s) => s.updateProject);
   const fps = useTimelineStore((s) => s.fps);
   const markDirty = useTimelineStore((s) => s.markDirty);
+
+  /** When true, changing W or H scales the other dimension to keep width/height ratio. */
+  const [canvasAspectLocked, setCanvasAspectLocked] = useState(false);
 
   // Derived selector: only returns the computed duration, not the full items array
   // This prevents re-renders when items change but duration stays the same
@@ -141,26 +149,56 @@ export const CanvasPanel = memo(function CanvasPanel() {
   }, [currentProject, markDirty, updateProject]);
 
 
+  const handleAspectLockToggle = useCallback(() => {
+    setCanvasAspectLocked((prev) => !prev);
+  }, []);
+
   const handleWidthChange = useCallback(
     (newWidth: number) => {
-      const normalizedWidth = Math.round(newWidth / 2) * 2;
-      void applyProjectMetadataChange(
-        { width: normalizedWidth },
-        { type: 'UPDATE_PROJECT_METADATA', payload: { fields: ['width'] } }
-      );
+      let w = Math.round(newWidth / 2) * 2;
+      w = Math.min(MAX_W, Math.max(MIN_W, w));
+
+      if (canvasAspectLocked && height > 0) {
+        const ratio = width / height;
+        let h = Math.round(w / ratio);
+        h = Math.round(h / 2) * 2;
+        h = Math.min(MAX_H, Math.max(MIN_H, h));
+        void applyProjectMetadataChange(
+          { width: w, height: h },
+          { type: 'UPDATE_PROJECT_METADATA', payload: { fields: ['width', 'height'] } }
+        );
+      } else {
+        void applyProjectMetadataChange(
+          { width: w },
+          { type: 'UPDATE_PROJECT_METADATA', payload: { fields: ['width'] } }
+        );
+      }
     },
-    [applyProjectMetadataChange]
+    [applyProjectMetadataChange, canvasAspectLocked, height, width]
   );
 
   const handleHeightChange = useCallback(
     (newHeight: number) => {
-      const normalizedHeight = Math.round(newHeight / 2) * 2;
-      void applyProjectMetadataChange(
-        { height: normalizedHeight },
-        { type: 'UPDATE_PROJECT_METADATA', payload: { fields: ['height'] } }
-      );
+      let h = Math.round(newHeight / 2) * 2;
+      h = Math.min(MAX_H, Math.max(MIN_H, h));
+
+      if (canvasAspectLocked && width > 0) {
+        const ratio = width / height;
+        let w = Math.round(h * ratio);
+        w = Math.round(w / 2) * 2;
+        w = Math.min(MAX_W, Math.max(MIN_W, w));
+        void applyProjectMetadataChange(
+          { width: w, height: h },
+          { type: 'UPDATE_PROJECT_METADATA', payload: { fields: ['width', 'height'] } }
+        );
+      } else {
+        void applyProjectMetadataChange(
+          { height: h },
+          { type: 'UPDATE_PROJECT_METADATA', payload: { fields: ['height'] } }
+        );
+      }
     },
-    [applyProjectMetadataChange]
+    [applyProjectMetadataChange, canvasAspectLocked, height, width]
   );
 
   const handleSwapDimensions = useCallback(() => {
@@ -221,14 +259,14 @@ export const CanvasPanel = memo(function CanvasPanel() {
         <LinkedDimensions
           width={width}
           height={height}
-          aspectLocked={false}
+          aspectLocked={canvasAspectLocked}
           onWidthChange={handleWidthChange}
           onHeightChange={handleHeightChange}
-          onAspectLockToggle={() => {}}
-          minWidth={320}
-          minHeight={240}
-          maxWidth={7680}
-          maxHeight={4320}
+          onAspectLockToggle={handleAspectLockToggle}
+          minWidth={MIN_W}
+          minHeight={MIN_H}
+          maxWidth={MAX_W}
+          maxHeight={MAX_H}
           step={2}
         />
 

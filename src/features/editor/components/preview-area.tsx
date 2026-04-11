@@ -457,6 +457,7 @@ export const PreviewArea = memo(function PreviewArea({ project }: PreviewAreaPro
         <>
           <InteractionLockRegion
             locked={isMaskEditingActive}
+            fillHeight
             className="h-full"
             overlayClassName="rounded-none"
             style={{ width: `${displayedSourceSplitPercent}%` }}
@@ -646,6 +647,7 @@ export const PreviewArea = memo(function PreviewArea({ project }: PreviewAreaPro
           </InteractionLockRegion>
           <InteractionLockRegion
             locked={isMaskEditingActive}
+            fillHeight
             className="h-full"
             overlayClassName="rounded-none"
             style={{ width: `${displayedScopesSplitPercent}%` }}

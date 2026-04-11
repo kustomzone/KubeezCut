@@ -58,6 +58,10 @@ import {
 
 const logger = createLogger('MediaSidebar');
 
+/** Fills space under the sidebar title row like the Effects tab: bounded flex child + scroll. */
+const SCROLL_TAB_PANEL_CLASS =
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable]';
+
 export interface MediaSidebarProps {
   /** Parent ResizablePanel owns width (OpenCut-style editor shell). */
   fillContainer?: boolean;
@@ -380,10 +384,12 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
   const innerWidthStyle = fillContainer ? undefined : { width: sidebarWidth };
 
   return (
-    <div className={`flex h-full min-h-0 ${fillContainer ? 'min-w-0 flex-1 w-full' : 'flex-shrink-0'}`}>
-      {/* Vertical Category Bar */}
+    <div
+      className={`flex h-full min-h-0 w-full ${fillContainer ? 'min-w-0 flex-1' : 'flex-shrink-0'}`}
+    >
+      {/* Vertical Category Bar — stretch to full tools column height (see sketch: rail fills parent). */}
       <div
-        className="panel-header border-r border-border flex flex-col items-center flex-shrink-0"
+        className="panel-header flex h-full min-h-0 flex-shrink-0 flex-col items-center self-stretch border-r border-border"
         style={{ width: EDITOR_LAYOUT_CSS_VALUES.sidebarRailWidth }}
       >
         {/* Header row - aligned with content panel header */}
@@ -454,16 +460,20 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
         </div>
       </div>
 
-      {/* Content Panel */}
+      {/* Content Panel — match PropertiesSidebar: explicit h-full so panel-bg + border-r span the full column (not content height only). */}
       <div
-        className={`panel-bg border-r border-border overflow-hidden relative ${
-          leftSidebarOpen ? (fillContainer ? 'flex-1 min-w-0 w-full' : '') : ''
+        className={`panel-bg border-r border-border overflow-hidden relative h-full min-h-0 ${
+          leftSidebarOpen
+            ? fillContainer
+              ? 'flex flex-1 min-w-0 w-full flex-col'
+              : 'flex w-full flex-col'
+            : ''
         }`}
         style={leftSidebarOpen ? contentWidthStyle : { transition: 'width 200ms' }}
       >
         {/* Use Activity for React 19 performance optimization - defers updates when hidden */}
         <Activity mode={leftSidebarOpen ? 'visible' : 'hidden'}>
-          <div className="h-full min-h-0 flex flex-col w-full" style={innerWidthStyle}>
+          <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col w-full" style={innerWidthStyle}>
           <div
             className={
               keyframeEditorOpen
@@ -514,7 +524,7 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
           </div>
 
           {/* Text Tab */}
-          <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${activeTab === 'text' ? 'block' : 'hidden'}`}>
+          <div className={`${SCROLL_TAB_PANEL_CLASS} ${activeTab === 'text' ? 'block' : 'hidden'}`}>
             <div className="space-y-3">
               <button
                 draggable={true}
@@ -537,7 +547,7 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
           </div>
 
           {/* Shapes Tab */}
-          <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${activeTab === 'shapes' ? 'block' : 'hidden'}`}>
+          <div className={`${SCROLL_TAB_PANEL_CLASS} ${activeTab === 'shapes' ? 'block' : 'hidden'}`}>
             <div className="grid grid-cols-3 gap-1.5">
                   <button
                     draggable={true}
@@ -681,7 +691,7 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
           </div>
 
           {/* Effects Tab */}
-          <div className={`min-h-0 flex-1 overflow-y-auto p-3 ${activeTab === 'effects' ? 'block' : 'hidden'}`}>
+          <div className={`${SCROLL_TAB_PANEL_CLASS} ${activeTab === 'effects' ? 'block' : 'hidden'}`}>
             <div className="space-y-3">
               {/* Blank Adjustment Layer */}
               <button
@@ -799,10 +809,8 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
             <TransitionsPanel />
           </div>
 
-          {/* AI Tab — overflow-y-auto on wrapper so flex-1 child gets a bounded height (same pattern as Text tab). */}
-          <div
-            className={`min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable] ${activeTab === 'ai' ? 'block' : 'hidden'}`}
-          >
+          {/* AI Tab */}
+          <div className={`${SCROLL_TAB_PANEL_CLASS} ${activeTab === 'ai' ? 'block' : 'hidden'}`}>
             <AiPanel />
           </div>
             </>

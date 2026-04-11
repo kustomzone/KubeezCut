@@ -1,5 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  useCanGoBack,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from '@tanstack/react-router';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
@@ -27,6 +34,40 @@ import {
   WHISPER_QUANTIZATION_OPTIONS,
 } from '@/shared/utils/whisper-settings';
 import type { MediaTranscriptModel, MediaTranscriptQuantization } from '@/types/storage';
+import { cn } from '@/shared/ui/cn';
+
+/** Hash fragment for deep-linking to the Kubeez API key block (see generate dialog → Settings). */
+export const SETTINGS_KUBEEZ_API_HASH = 'kubeez-api';
+
+/**
+ * Use on every Link / navigate to this section. TanStack Router defaults would otherwise
+ * `resetScroll` to the top and `hashScrollIntoView` to the start of the target — both fight vertical centering.
+ */
+export const SETTINGS_KUBEEZ_API_LINK_PROPS = {
+  to: '/settings' as const,
+  hash: SETTINGS_KUBEEZ_API_HASH,
+  resetScroll: false,
+  hashScrollIntoView: false,
+};
+
+/** Centers `el` vertically in the viewport. `index.css` sets `* { scroll-behavior: auto }`; we briefly allow smooth on the root for this scroll only. */
+function scrollElementToVerticalCenter(el: HTMLElement, behavior: ScrollBehavior = 'smooth') {
+  const rect = el.getBoundingClientRect();
+  const top =
+    window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
+  const y = Math.max(0, top);
+  const root = document.documentElement;
+  const prevBehavior = root.style.scrollBehavior;
+  if (behavior === 'smooth') {
+    root.style.scrollBehavior = 'smooth';
+  }
+  window.scrollTo({ top: y, left: 0, behavior });
+  if (behavior === 'smooth') {
+    window.setTimeout(() => {
+      root.style.scrollBehavior = prevBehavior;
+    }, 900);
+  }
+}
 
 export const Route = createFileRoute('/settings')({
   component: Settings,
@@ -49,6 +90,56 @@ function Settings() {
   const resetToDefaults = useSettingsStore((s) => s.resetToDefaults);
   const defaultWhisperLanguageValue = getWhisperLanguageSelectValue(defaultWhisperLanguage);
   const defaultWhisperQuantizationOption = getWhisperQuantizationOption(defaultWhisperQuantization);
+
+  const router = useRouter();
+  const navigate = useNavigate();
+  const canGoBack = useCanGoBack();
+
+  const kubeezSectionRef = useRef<HTMLElement>(null);
+  const [kubeezSectionHighlight, setKubeezSectionHighlight] = useState(false);
+  const locationHash = useRouterState({ select: (s) => s.location.hash });
+
+  const handleHeaderBack = () => {
+    if (canGoBack) {
+      router.history.back();
+    } else {
+      void navigate({ to: '/projects' });
+    }
+  };
+
+  useEffect(() => {
+    const normalized = (locationHash ?? '').replace(/^#/, '');
+    if (normalized !== SETTINGS_KUBEEZ_API_HASH) return;
+
+    const section = kubeezSectionRef.current;
+    if (!section) return;
+
+    setKubeezSectionHighlight(true);
+
+    const center = (behavior: ScrollBehavior) => scrollElementToVerticalCenter(section, behavior);
+
+    let raf2 = 0;
+    const raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => center('auto'));
+    });
+
+    const smoothId = window.setTimeout(() => center('smooth'), 50);
+    const correctId = window.setTimeout(() => center('smooth'), 280);
+
+    const focusId = window.setTimeout(() => {
+      document.getElementById('kubeez-api-key')?.focus({ preventScroll: true });
+    }, 600);
+    const clearHighlightId = window.setTimeout(() => setKubeezSectionHighlight(false), 2800);
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+      clearTimeout(smoothId);
+      clearTimeout(correctId);
+      clearTimeout(focusId);
+      clearTimeout(clearHighlightId);
+    };
+  }, [locationHash]);
 
   // Format hotkey for display
   const formatHotkey = (hotkey: string): string => {
@@ -82,11 +173,9 @@ function Settings() {
       <div className="panel-header border-b border-border">
         <div className="max-w-4xl mx-auto px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link to="/projects">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
+            <Button variant="ghost" size="icon" type="button" onClick={handleHeaderBack} aria-label="Back">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
             <KubeezCutLogo variant="full" size="md" />
           </div>
           <Button variant="outline" onClick={resetToDefaults}>
@@ -260,7 +349,15 @@ function Settings() {
         </section>
 
         {/* Kubeez API */}
-        <section className="space-y-4">
+        <section
+          ref={kubeezSectionRef}
+          id={SETTINGS_KUBEEZ_API_HASH}
+          className={cn(
+            'space-y-4 rounded-xl border border-transparent p-3 transition-[box-shadow,background-color,border-color] duration-500',
+            kubeezSectionHighlight &&
+              'border-primary/35 bg-primary/[0.06] shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]',
+          )}
+        >
           <div className="flex items-center gap-3 border-b border-border pb-2">
             <img
               src={KUBEEZ_BRAND_LOGO_URL}
