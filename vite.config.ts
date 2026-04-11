@@ -40,7 +40,7 @@ function kubeezBrowserApiEnvDefine(mode: string): Record<string, string> {
   }
 }
 
-/** Replaces %SITE_URL% in index.html; writes robots.txt + sitemap.xml on production build. */
+/** Replaces %SITE_URL% in index.html; writes robots.txt + sitemap.xml + ai.txt on production build. */
 function seoPlugin(siteUrl: string): Plugin {
   let outDir = 'dist'
   return {
@@ -54,6 +54,7 @@ function seoPlugin(siteUrl: string): Plugin {
     closeBundle() {
       const robots = `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`
       const staticPaths = ['/', '/projects', ...getBlogSitemapPaths()]
+      const indexablePaths = staticPaths.filter((p) => !p.includes('$'))
       const urlEntries = staticPaths
         .map((p) => {
           const loc = p === '/' ? `${siteUrl}/` : `${siteUrl}${p}`
@@ -71,9 +72,23 @@ function seoPlugin(siteUrl: string): Plugin {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urlEntries}
 </urlset>`
+      const aiTxt = [
+        '# KubeezCut AI discovery file',
+        `Site: ${siteUrl}`,
+        `Sitemap: ${siteUrl}/sitemap.xml`,
+        '',
+        'Preferred-Crawl: true',
+        'Allow: /',
+        '',
+        '# High-value pages',
+        ...indexablePaths.map((p) => (p === '/' ? `${siteUrl}/` : `${siteUrl}${p}`)),
+      ].join('\n')
       fs.mkdirSync(outDir, { recursive: true })
       fs.writeFileSync(path.join(outDir, 'robots.txt'), robots, 'utf8')
       fs.writeFileSync(path.join(outDir, 'sitemap.xml'), sitemap, 'utf8')
+      fs.writeFileSync(path.join(outDir, 'ai.txt'), aiTxt, 'utf8')
+      // llms.txt is recognized by more AI crawlers; keep same content as ai.txt.
+      fs.writeFileSync(path.join(outDir, 'llms.txt'), aiTxt, 'utf8')
     },
   }
 }
