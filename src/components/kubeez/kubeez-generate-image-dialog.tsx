@@ -88,7 +88,7 @@ import { createLogger } from '@/shared/logging/logger';
 import { Film, Image as ImageIcon, Info, Paperclip, Video, X } from 'lucide-react';
 import { cn } from '@/shared/ui/cn';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { SETTINGS_KUBEEZ_API_LINK_PROPS } from '@/routes/settings';
+import { SETTINGS_KUBEEZ_API_LINK_PROPS } from '@/config/settings-kubeez-api';
 import { markKubeezGenerateReopenAfterSettings } from '@/shared/state/kubeez-generate-dialog';
 
 const logger = createLogger('KubeezGenerateDialog');

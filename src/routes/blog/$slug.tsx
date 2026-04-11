@@ -2,7 +2,8 @@ import { createFileRoute, Link, notFound } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { getBlogPostBySlug } from '@/content/blog-posts';
-import { InlineEmphasis, useDocumentSeo } from '@/lib/seo/use-document-seo';
+import { InlineEmphasis } from '@/shared/seo/inline-emphasis';
+import { useDocumentSeo } from '@/shared/seo/use-document-seo';
 import { Button } from '@/components/ui/button';
 import { KubeezCutLogo } from '@/components/brand/kubeez-cut-logo';
 

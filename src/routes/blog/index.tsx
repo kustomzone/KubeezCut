@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { blogPosts } from '@/content/blog-posts';
-import { useDocumentSeo } from '@/lib/seo/use-document-seo';
+import { useDocumentSeo } from '@/shared/seo/use-document-seo';
 import { Button } from '@/components/ui/button';
 import { KubeezCutLogo } from '@/components/brand/kubeez-cut-logo';
 

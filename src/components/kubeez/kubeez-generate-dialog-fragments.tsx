@@ -29,7 +29,7 @@ import {
   type KubeezModelGridItem,
 } from '@/infrastructure/kubeez/kubeez-video-model-variants';
 import { Link } from '@tanstack/react-router';
-import { SETTINGS_KUBEEZ_API_LINK_PROPS } from '@/routes/settings';
+import { SETTINGS_KUBEEZ_API_LINK_PROPS } from '@/config/settings-kubeez-api';
 import { markKubeezGenerateReopenAfterSettings } from '@/shared/state/kubeez-generate-dialog';
 import { useProjectStore } from '@/features/projects/stores/project-store';
 import { Check, Clapperboard, ImageIcon, LayoutGrid, Loader2, Mic, Music2, Search } from 'lucide-react';
