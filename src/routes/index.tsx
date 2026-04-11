@@ -1,7 +1,6 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
+import { KubeezCutHomePage } from '@/components/marketing/kubeezcut-home-page';
 
 export const Route = createFileRoute('/')({
-  beforeLoad: () => {
-    throw redirect({ to: '/projects' });
-  },
+  component: KubeezCutHomePage,
 });

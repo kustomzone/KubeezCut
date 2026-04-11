@@ -14,6 +14,10 @@ interface KubeezCutLogoProps {
   variant?: 'full' | 'icon';
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  /** Renders the mark at icon size plus a visible “KubeezCut” wordmark (for headers and nav). */
+  withWordmark?: boolean;
+  /** Extra classes for the wordmark text (e.g. `text-white` on dark headers). */
+  wordmarkClassName?: string;
 }
 
 const sizeConfig = {
@@ -31,17 +35,52 @@ const sizeConfig = {
   },
 };
 
-export function KubeezCutLogo({ variant = 'full', size = 'md', className }: KubeezCutLogoProps) {
-  const config = sizeConfig[size];
-  const imgClass = variant === 'icon' ? config.icon : config.full;
+const wordmarkSizeClass = {
+  sm: 'text-sm',
+  md: 'text-base',
+  lg: 'text-lg',
+} as const;
 
-  return (
+export function KubeezCutLogo({
+  variant = 'full',
+  size = 'md',
+  className,
+  withWordmark = false,
+  wordmarkClassName,
+}: KubeezCutLogoProps) {
+  const config = sizeConfig[size];
+  const imgClass = withWordmark ? config.icon : variant === 'icon' ? config.icon : config.full;
+
+  const img = (
     <img
       src={KUBEEZCUT_LOGO_URL}
-      alt="KubeezCut"
+      alt={withWordmark ? '' : 'KubeezCut'}
       decoding="async"
       loading="lazy"
-      className={cn('w-auto object-contain object-left', imgClass, className)}
+      className={cn(
+        'w-auto shrink-0 object-contain object-left',
+        imgClass,
+        !withWordmark && className,
+      )}
     />
+  );
+
+  if (!withWordmark) {
+    return img;
+  }
+
+  return (
+    <span className={cn('inline-flex items-center gap-2', className)}>
+      {img}
+      <span
+        className={cn(
+          wordmarkSizeClass[size],
+          'font-semibold tracking-tight text-foreground',
+          wordmarkClassName,
+        )}
+      >
+        KubeezCut
+      </span>
+    </span>
   );
 }

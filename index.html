@@ -8,34 +8,34 @@
     <meta name="theme-color" content="#09090b" />
     <meta name="color-scheme" content="dark light" />
 
-    <title>KubeezCut — Free Open Source Browser Video Editor &amp; Timeline</title>
+    <title>KubeezCut — Free Browser Video Editor with AI Generation via Kubeez.com</title>
     <meta
       name="description"
-      content="KubeezCut is a free, open-source multi-track video editor in your browser. Import media from your device (local-first library), edit with WebGPU and WebCodecs, and export—no install. Optional AI images, video, music, and speech via Kubeez.com with your API key."
+      content="KubeezCut: free open-source (MIT) browser video editor — multi-track NLE, WebGPU compositing, WebCodecs MP4 export, local-first media. Optional AI images, video, music &amp; speech via Kubeez.com API. No install. Guides on WebGPU, WebCodecs &amp; privacy in our blog."
     />
     <meta
       name="keywords"
-      content="free video editor, open source video editor, browser video editor, online video editor, timeline editor, multi-track editor, KubeezCut, Kubeez, WebGPU, WebCodecs, local-first, media import, AI video, non-destructive editing"
+      content="KubeezCut, free video editor, open source video editor, browser video editor, online video editor no upload, timeline editor, multi-track NLE, non-linear editor, WebGPU video editor, WebCodecs export, MP4 export browser, local-first video editor, MIT license, AI video editor, Kubeez.com API, generative video, text to speech video, free NLE, cross-platform video editor"
     />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="%SITE_URL%/" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="KubeezCut" />
-    <meta property="og:title" content="KubeezCut — Free Open Source Browser Video Editor" />
+    <meta property="og:title" content="KubeezCut — Free Browser Video Editor with AI via Kubeez.com" />
     <meta
       property="og:description"
-      content="Edit multi-track video in the browser for free. Import your media, stay local-first, export without an install. Add optional AI-generated images, video, music, and speech with a Kubeez.com API key."
+      content="Free open-source browser video editor: multi-track timeline, WebGPU, local-first. MIT licensed. Optional AI images, video, music &amp; speech from Kubeez.com — generate, then edit in KubeezCut."
     />
     <meta property="og:url" content="%SITE_URL%/" />
     <meta property="og:image" content="%SITE_URL%/brand/kubeezcut-logo.png" />
     <meta property="og:locale" content="en_US" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="KubeezCut — Free Open Source Browser Video Editor" />
+    <meta name="twitter:title" content="KubeezCut — Free Browser Video Editor with AI via Kubeez.com" />
     <meta
       name="twitter:description"
-      content="Free open-source timeline editor in the browser: import media, edit locally, export. Optional AI media via Kubeez.com."
+      content="KubeezCut — free open-source browser video editor (MIT). Local-first editing + optional AI from Kubeez.com."
     />
     <meta name="twitter:image" content="%SITE_URL%/brand/kubeezcut-logo.png" />
 
@@ -44,12 +44,31 @@
         "@context": "https://schema.org",
         "@graph": [
           {
+            "@type": "WebSite",
+            "@id": "%SITE_URL%/#website",
+            "name": "KubeezCut",
+            "url": "%SITE_URL%/",
+            "description": "Free open-source browser-based multi-track video editor. Optional AI-generated media via Kubeez.com.",
+            "publisher": { "@id": "%SITE_URL%/#org" },
+            "inLanguage": "en-US"
+          },
+          {
+            "@type": "Organization",
+            "@id": "%SITE_URL%/#org",
+            "name": "KubeezCut",
+            "url": "%SITE_URL%/",
+            "sameAs": ["https://github.com/MeepCastana/KubeezCut", "https://kubeez.com/"],
+            "description": "Open source video editing in the browser; pairs with Kubeez.com for optional AI generation APIs."
+          },
+          {
             "@type": "SoftwareApplication",
             "name": "KubeezCut",
             "applicationCategory": "MultimediaApplication",
+            "applicationSubCategory": "VideoEditor",
             "operatingSystem": "Web browser",
-            "description": "Free, open-source multi-track video editor in the browser. Import media from your device, edit with WebGPU and WebCodecs, export projects locally. Optional AI-generated images, video, music, and speech through the Kubeez API at kubeez.com.",
+            "description": "KubeezCut is a free, open-source (MIT) multi-track video editor that runs in your browser. Edit locally with WebGPU and WebCodecs. Optionally connect a Kubeez.com API key for AI-generated images, video, music, and speech — then edit and export on your device.",
             "url": "%SITE_URL%/",
+            "downloadUrl": "https://github.com/MeepCastana/KubeezCut",
             "image": "%SITE_URL%/brand/kubeezcut-logo.png",
             "isAccessibleForFree": true,
             "license": "https://opensource.org/licenses/MIT",
@@ -58,16 +77,55 @@
               "price": "0",
               "priceCurrency": "USD"
             },
-            "publisher": {
-              "@type": "Organization",
-              "name": "Kubeez",
-              "url": "https://kubeez.com"
-            },
-            "isPartOf": {
-              "@type": "WebSite",
-              "name": "Kubeez",
-              "url": "https://kubeez.com"
-            }
+            "isPartOf": { "@id": "%SITE_URL%/#website" },
+            "publisher": { "@id": "%SITE_URL%/#org" },
+            "maintainer": { "@id": "%SITE_URL%/#org" }
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is KubeezCut open source and free?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. KubeezCut is free to use and released under the MIT License. You can fork the source on GitHub and run it locally."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does AI generation work with Kubeez.com?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "KubeezCut edits video in your browser. For optional AI-generated images, video, music, or speech, add a Kubeez API key from kubeez.com in Settings. Media is generated through Kubeez services; editing stays in KubeezCut."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does KubeezCut use WebGPU and WebCodecs?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. KubeezCut uses WebGPU for GPU-accelerated compositing and preview where supported, and WebCodecs for encoding and decoding so you can export video in the browser without uploading your timeline to a server."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Where can I read more about KubeezCut?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Visit the KubeezCut blog at the same site under /blog for articles on browser video editing, local-first workflows, and optional Kubeez.com AI integration."
+                }
+              }
+            ]
+          },
+          {
+            "@type": "Blog",
+            "@id": "%SITE_URL%/#blog",
+            "name": "KubeezCut Blog",
+            "url": "%SITE_URL%/blog",
+            "description": "Articles on free browser video editing, WebGPU, WebCodecs, open-source NLE workflows, and Kubeez.com AI.",
+            "publisher": { "@id": "%SITE_URL%/#org" },
+            "inLanguage": "en-US"
           }
         ]
       }

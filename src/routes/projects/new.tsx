@@ -56,7 +56,7 @@ function NewProject() {
       <div className="panel-header border-b border-border">
         <div className="max-w-[1920px] mx-auto px-6 py-5 flex items-center justify-between">
           <Link to="/projects">
-            <KubeezCutLogo variant="full" size="md" className="hover:opacity-80 transition-opacity" />
+            <KubeezCutLogo withWordmark size="md" className="hover:opacity-80 transition-opacity" />
           </Link>
         </div>
       </div>

@@ -176,7 +176,7 @@ function Settings() {
             <Button variant="ghost" size="icon" type="button" onClick={handleHeaderBack} aria-label="Back">
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <KubeezCutLogo variant="full" size="md" />
+            <KubeezCutLogo withWordmark size="md" />
           </div>
           <Button variant="outline" onClick={resetToDefaults}>
             <RotateCcw className="w-4 h-4 mr-2" />

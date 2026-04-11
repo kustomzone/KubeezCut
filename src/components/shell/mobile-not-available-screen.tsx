@@ -22,7 +22,7 @@ export function MobileNotAvailableScreen() {
       />
 
       <div className="relative z-10 flex max-w-md flex-col items-center gap-8">
-        <KubeezCutLogo variant="full" size="lg" className="opacity-95 drop-shadow-sm" />
+        <KubeezCutLogo withWordmark size="lg" className="opacity-95 drop-shadow-sm" />
 
         <div className="space-y-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#4E50BE]">

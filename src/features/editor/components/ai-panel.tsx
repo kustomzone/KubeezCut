@@ -45,7 +45,7 @@ import {
 } from '../services/kitten-tts-service';
 
 const DEFAULT_PROMPT =
-  'Welcome to Kubeez. This voice was generated locally in the browser with WebGPU.';
+  'Welcome to KubeezCut. This voice was generated locally in the browser with WebGPU.';
 
 interface Generation {
   id: string;

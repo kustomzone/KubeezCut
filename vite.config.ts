@@ -4,6 +4,7 @@ import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { getBlogSitemapPaths } from './src/content/blog-posts'
 
 function resolvePublicSiteUrl(mode: string): string {
   const env = loadEnv(mode, process.cwd(), '')
@@ -52,18 +53,23 @@ function seoPlugin(siteUrl: string): Plugin {
     },
     closeBundle() {
       const robots = `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`
+      const staticPaths = ['/', '/projects', ...getBlogSitemapPaths()]
+      const urlEntries = staticPaths
+        .map((p) => {
+          const loc = p === '/' ? `${siteUrl}/` : `${siteUrl}${p}`
+          const priority =
+            p === '/' ? '1.0' : p === '/projects' || p === '/blog' ? '0.9' : p.startsWith('/blog/') ? '0.85' : '0.8'
+          const changefreq = p.startsWith('/blog') ? 'monthly' : 'weekly'
+          return `  <url>
+    <loc>${loc}</loc>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`
+        })
+        .join('\n')
       const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>${siteUrl}/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>${siteUrl}/projects</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
+${urlEntries}
 </urlset>`
       fs.mkdirSync(outDir, { recursive: true })
       fs.writeFileSync(path.join(outDir, 'robots.txt'), robots, 'utf8')
