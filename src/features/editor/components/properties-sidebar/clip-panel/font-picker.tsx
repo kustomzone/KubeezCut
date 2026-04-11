@@ -17,6 +17,8 @@ interface FontPickerProps {
 }
 
 const DEFAULT_PREVIEW_TEXT = 'The quick brown fox jumps over the lazy dog';
+/** Only scan a short prefix so huge pasted/buffer text cannot freeze the UI each render. */
+const PREVIEW_TEXT_HEAD_CHARS = 512;
 const PREVIEW_PREFETCH_LIMIT = 4;
 const PREVIEW_PREFETCH_DEBOUNCE_MS = 120;
 
@@ -71,7 +73,10 @@ export function FontPicker({
   }, [fonts, searchQuery]);
 
   const normalizedPreviewText = useMemo(() => {
-    const source = previewText?.trim() ? previewText : DEFAULT_PREVIEW_TEXT;
+    const head = previewText && previewText.length > 0
+      ? previewText.slice(0, PREVIEW_TEXT_HEAD_CHARS)
+      : '';
+    const source = head.trim().length > 0 ? head : DEFAULT_PREVIEW_TEXT;
     return source.replace(/\s+/g, ' ').slice(0, 72);
   }, [previewText]);
 

@@ -54,6 +54,18 @@ const FONT_WEIGHT_OPTIONS = [
 ] as const;
 
 const FONT_WEIGHT_VALUES = FONT_WEIGHT_MAP as Record<NonNullable<TextItem['fontWeight']>, number>;
+
+/** Hard cap so pathological paste / key-repeat cannot blow memory or freeze React. */
+const MAX_TEXT_CONTENT_CHARS = 100_000;
+const MAX_CLIP_LABEL_CHARS = 120;
+/** Match font-picker preview window — avoid passing megabyte strings as previewText. */
+const FONT_PICKER_PREVIEW_HEAD_CHARS = 512;
+
+function buildTextClipLabel(full: string): string {
+  const line = full.split('\n')[0] ?? '';
+  const base = line.length > MAX_CLIP_LABEL_CHARS ? line.slice(0, MAX_CLIP_LABEL_CHARS) : line;
+  return base.trim().length > 0 ? base : 'Text';
+}
 const EMPTY_TEXT_SHADOW: NonNullable<TextItem['textShadow']> = {
   offsetX: 0,
   offsetY: 0,
@@ -238,6 +250,9 @@ export function TextSection({
     [textItems, updateItem]
   );
 
+  const updateTextItemsRef = useRef(updateTextItems);
+  updateTextItemsRef.current = updateTextItems;
+
   const setTextPropertiesPreview = useCallback(
     (properties: ItemPropertiesPreview) => {
       const previews: Record<string, ItemPropertiesPreview> = {};
@@ -256,9 +271,13 @@ export function TextSection({
   // Handlers
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newText = e.target.value;
+      let newText = e.target.value;
+      if (newText.length > MAX_TEXT_CONTENT_CHARS) {
+        newText = newText.slice(0, MAX_TEXT_CONTENT_CHARS);
+      }
+      const label = buildTextClipLabel(newText);
       textItems.forEach((item) => {
-        updateItem(item.id, { text: newText, label: newText.split('\n')[0] || 'Text' });
+        updateItem(item.id, { text: newText, label });
       });
     },
     [textItems, updateItem]
@@ -337,8 +356,8 @@ export function TextSection({
       return;
     }
 
-    updateTextItems({ fontWeight: fallbackWeight });
-  }, [sharedValues?.fontFamily, supportedFontWeightOptions, updateTextItems]);
+    updateTextItemsRef.current({ fontWeight: fallbackWeight });
+  }, [sharedValues?.fontFamily, supportedFontWeightOptions]);
 
   // Live preview for color (during picker drag)
   const handleColorLiveChange = useCallback(
@@ -612,7 +631,7 @@ export function TextSection({
     return null;
   }
 
-  const fontPreviewText = sharedValues.text ?? textItems[0]?.text ?? '';
+  const fontPreviewText = (sharedValues.text ?? textItems[0]?.text ?? '').slice(0, FONT_PICKER_PREVIEW_HEAD_CHARS);
   const isBoldActive = sharedValues.fontWeight === 'bold';
   const canUseBold = supportedFontWeightOptions.some((weight) => weight.value === 'bold');
   const isItalicActive = sharedValues.fontStyle === 'italic';

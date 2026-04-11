@@ -8,8 +8,9 @@ import { Player, type PlayerRef } from '@/features/preview/deps/player-core';
 import type { CaptureOptions, PreviewQuality } from '@/shared/state/playback';
 import { usePlaybackStore } from '@/shared/state/playback';
 import {
-  useTimelineStore,
   useItemsStore,
+  useKeyframesStore,
+  useTimelineSettingsStore,
   useTransitionsStore,
   useMediaDependencyStore,
 } from '@/features/preview/deps/timeline-store';
@@ -155,9 +156,25 @@ import {
   parsePreviewPerfPanelQuery,
   blobToDataUrl,
 } from '../utils/preview-constants';
-import { collectVisualInvalidationRanges } from '../utils/preview-frame-invalidation';
+import {
+  areKeyframesDataEqual,
+  areTrackTimelineItemRefsEqual,
+  collectVisualInvalidationRanges,
+  getTextContentOnlyInvalidationDiag,
+} from '../utils/preview-frame-invalidation';
 
 const logger = createLogger('VideoPreview');
+
+/** Avoid subpixel flicker retriggering setState every layout pass (can nest past React's depth limit). */
+function domRectsVisuallyEqual(a: DOMRectReadOnly, b: DOMRectReadOnly): boolean {
+  const eps = 0.5;
+  return (
+    Math.abs(a.left - b.left) < eps
+    && Math.abs(a.top - b.top) < eps
+    && Math.abs(a.width - b.width) < eps
+    && Math.abs(a.height - b.height) < eps
+  );
+}
 
 type CompositionRenderer = Awaited<ReturnType<typeof createCompositionRenderer>>;
 
@@ -226,6 +243,7 @@ export const VideoPreview = memo(function VideoPreview({
 }: VideoPreviewProps) {
   const playerRef = useRef<PlayerRef>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
+  const playerContainerRectRafRef = useRef<number | null>(null);
   const scrubCanvasRef = useRef<HTMLCanvasElement>(null);
   const gpuEffectsCanvasRef = useRef<HTMLCanvasElement>(null);
   const scrubFrameDirtyRef = useRef(false);
@@ -324,18 +342,19 @@ export const VideoPreview = memo(function VideoPreview({
   // State for gizmo overlay positioning
   const [playerContainerRect, setPlayerContainerRect] = useState<DOMRect | null>(null);
 
-  // Callback ref that measures immediately when element is available
+  // Callback ref: only assign the ref. Never call setState here — even setState(null) when
+  // React passes `null` can participate in synchronous update chains under rapid commits
+  // (e.g. held key repeat) and trigger "Maximum update depth exceeded". Rect is owned by
+  // useLayoutEffect + ResizeObserver below (DOMRect equality guard); stale rect until the
+  // next layout pass is acceptable vs. crashing the preview subtree.
   const setPlayerContainerRefCallback = useCallback((el: HTMLDivElement | null) => {
     playerContainerRef.current = el;
-    if (el) {
-      setPlayerContainerRect(el.getBoundingClientRect());
-    }
   }, []);
 
   // Granular selectors - avoid subscribing to currentFrame here to prevent re-renders
-  const fps = useTimelineStore((s) => s.fps);
-  const tracks = useTimelineStore((s) => s.tracks);
-  const keyframes = useTimelineStore((s) => s.keyframes);
+  const fps = useTimelineSettingsStore((s) => s.fps);
+  const tracks = useItemsStore((s) => s.tracks);
+  const keyframes = useKeyframesStore((s) => s.keyframes);
   const items = useItemsStore((s) => s.items);
   const itemsByTrackId = useItemsStore((s) => s.itemsByTrackId);
   const mediaDependencyVersion = useMediaDependencyStore((s) => s.mediaDependencyVersion);
@@ -1247,7 +1266,7 @@ export const VideoPreview = memo(function VideoPreview({
       const stats = previewPerfRef.current;
       const seekNow = performance.now();
       const playbackState = usePlaybackStore.getState();
-      const timelineFps = useTimelineStore.getState().fps;
+      const timelineFps = useTimelineSettingsStore.getState().fps;
       const adaptiveQualityState = adaptiveQualityStateRef.current;
       const frameTimeBudgetMs = getFrameBudgetMs(timelineFps, playbackState.playbackRate);
       const userPreviewQuality = playbackState.previewQuality;
@@ -1714,6 +1733,13 @@ export const VideoPreview = memo(function VideoPreview({
     project.backgroundColor,
     fastScrubScaledKeyframes,
   ]);
+
+  // `fastScrubInputProps` gets a new identity every visual timeline edit (e.g. text typing).
+  // Passing it into `ensureFastScrubRenderer`'s useCallback deps re-ran the huge scrub
+  // useEffect + capture registration every keystroke — overlay setState churn can exceed
+  // React's max nested update depth. Live clip data is already read via getLiveItemSnapshot.
+  const fastScrubInputPropsRef = useRef(fastScrubInputProps);
+  fastScrubInputPropsRef.current = fastScrubInputProps;
 
   const playbackTransitionFingerprint = useMemo(() => (
     transitions
@@ -2267,7 +2293,7 @@ export const VideoPreview = memo(function VideoPreview({
         const canvas = new OffscreenCanvas(renderSize.width, renderSize.height);
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
-        const renderer = await createCompositionRenderer(fastScrubInputProps, canvas, ctx, {
+        const renderer = await createCompositionRenderer(fastScrubInputPropsRef.current, canvas, ctx, {
           mode: 'preview',
           getPreviewTransformOverride,
           getPreviewEffectsOverride,
@@ -2291,7 +2317,6 @@ export const VideoPreview = memo(function VideoPreview({
     return bgTransitionInitPromiseRef.current;
   }, [
     disposeFastScrubRenderer,
-    fastScrubInputProps,
     fastScrubRendererStructureKey,
     getLiveItemSnapshot,
     getLiveKeyframes,
@@ -2323,7 +2348,7 @@ export const VideoPreview = memo(function VideoPreview({
         const offscreenCtx = offscreen.getContext('2d');
         if (!offscreenCtx) return null;
 
-        const renderer = await createCompositionRenderer(fastScrubInputProps, offscreen, offscreenCtx, {
+        const renderer = await createCompositionRenderer(fastScrubInputPropsRef.current, offscreen, offscreenCtx, {
           mode: 'preview',
           getPreviewTransformOverride,
           getPreviewEffectsOverride,
@@ -2389,7 +2414,6 @@ export const VideoPreview = memo(function VideoPreview({
     return scrubInitPromiseRef.current;
   }, [
     disposeFastScrubRenderer,
-    fastScrubInputProps,
     fastScrubRendererStructureKey,
     fps,
     getLiveItemSnapshot,
@@ -2574,6 +2598,21 @@ export const VideoPreview = memo(function VideoPreview({
   // frames and ask the overlay to repaint instead of rebuilding GPU/decoder state.
   useEffect(() => {
     const previousVisualState = previousFastScrubVisualStateRef.current;
+
+    // Parent memos often allocate a new `tracks` array while item object refs stay identical.
+    // Skip duplicate invalidation work when only the track shell changed.
+    if (
+      previousVisualState.tracks !== fastScrubScaledTracks
+      && areKeyframesDataEqual(previousVisualState.keyframes, fastScrubScaledKeyframes)
+      && areTrackTimelineItemRefsEqual(previousVisualState.tracks, fastScrubScaledTracks)
+    ) {
+      previousFastScrubVisualStateRef.current = {
+        tracks: fastScrubScaledTracks,
+        keyframes: fastScrubScaledKeyframes,
+      };
+      return;
+    }
+
     previousFastScrubVisualStateRef.current = {
       tracks: fastScrubScaledTracks,
       keyframes: fastScrubScaledKeyframes,
@@ -2585,6 +2624,13 @@ export const VideoPreview = memo(function VideoPreview({
       previousKeyframes: previousVisualState.keyframes,
       nextKeyframes: fastScrubScaledKeyframes,
     });
+    const textOnlyDiag = getTextContentOnlyInvalidationDiag(
+      previousVisualState.tracks,
+      fastScrubScaledTracks,
+      previousVisualState.keyframes,
+      fastScrubScaledKeyframes,
+    );
+    const skipResumeForTextTyping = textOnlyDiag.ok;
     if (visualInvalidationRanges.length === 0) {
       return;
     }
@@ -2632,7 +2678,8 @@ export const VideoPreview = memo(function VideoPreview({
     }
 
     if (
-      scrubRenderer
+      !skipResumeForTextTyping
+      && scrubRenderer
       && scrubRendererMatchesStructure
       && currentFrameInvalidated
       && (
@@ -2643,10 +2690,15 @@ export const VideoPreview = memo(function VideoPreview({
       )
     ) {
       scrubRequestedFrameRef.current = targetFrame;
-      void resumeScrubLoopRef.current();
+      // Defer scrub pump out of the effect flush: typing can retrigger this effect every keystroke;
+      // a synchronous pump can chain overlay setState and hit React's max update depth.
+      queueMicrotask(() => {
+        void resumeScrubLoopRef.current();
+      });
     }
+    // Omit `fastScrubInputProps`: new object identity on unrelated memo fields retriggers without
+    // real clip changes. Structure/transitions/project dims are covered by `fastScrubRendererStructureKey`.
   }, [
-    fastScrubInputProps,
     fastScrubScaledKeyframes,
     fastScrubScaledTracks,
     fastScrubRendererStructureKey,
@@ -4938,38 +4990,51 @@ export const VideoPreview = memo(function VideoPreview({
     return playerSize.width > containerSize.width || playerSize.height > containerSize.height;
   }, [zoom, playerSize, containerSize]);
 
-  // Track player container rect changes for gizmo positioning
+  // Track player container rect changes for gizmo positioning.
+  // ResizeObserver + scroll can fire during layout; synchronous setState in the same turn as a
+  // React commit can chain nested updates. Coalesce to one rAF, then queueMicrotask so
+  // dispatchSetState runs after the commit/layout stack unwinds. Relaxed float equality skips noise.
   useLayoutEffect(() => {
     if (suspendOverlay) return;
     const container = playerContainerRef.current;
     if (!container) return;
 
-    const updateRect = () => {
-      const nextRect = container.getBoundingClientRect();
-      setPlayerContainerRect((prev) => {
-        if (
-          prev
-          && prev.left === nextRect.left
-          && prev.top === nextRect.top
-          && prev.width === nextRect.width
-          && prev.height === nextRect.height
-        ) {
-          return prev;
-        }
-        return nextRect;
+    const commitRect = () => {
+      const el = playerContainerRef.current;
+      if (!el) return;
+      const nextRect = el.getBoundingClientRect();
+      queueMicrotask(() => {
+        setPlayerContainerRect((prev) => {
+          if (prev && domRectsVisuallyEqual(prev, nextRect)) {
+            return prev;
+          }
+          return nextRect;
+        });
       });
     };
 
-    updateRect();
+    const scheduleRect = () => {
+      if (playerContainerRectRafRef.current !== null) return;
+      playerContainerRectRafRef.current = requestAnimationFrame(() => {
+        playerContainerRectRafRef.current = null;
+        commitRect();
+      });
+    };
 
-    const resizeObserver = new ResizeObserver(updateRect);
+    scheduleRect();
+
+    const resizeObserver = new ResizeObserver(scheduleRect);
     resizeObserver.observe(container);
 
-    window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('scroll', scheduleRect, true);
 
     return () => {
+      if (playerContainerRectRafRef.current !== null) {
+        cancelAnimationFrame(playerContainerRectRafRef.current);
+        playerContainerRectRafRef.current = null;
+      }
       resizeObserver.disconnect();
-      window.removeEventListener('scroll', updateRect, true);
+      window.removeEventListener('scroll', scheduleRect, true);
     };
   }, [suspendOverlay]);
 

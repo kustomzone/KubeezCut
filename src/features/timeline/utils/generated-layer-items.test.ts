@@ -67,4 +67,33 @@ describe('createTimelineTemplateItem', () => {
       },
     });
   });
+
+  it('creates a text item with style preset overrides when stylePresetId is set', () => {
+    const item = createTimelineTemplateItem({
+      template: {
+        type: 'timeline-template',
+        itemType: 'text',
+        label: 'Neon',
+        stylePresetId: 'neon',
+      },
+      placement: {
+        trackId: 'track-1',
+        from: 0,
+        durationInFrames: 120,
+        canvasWidth: 1920,
+        canvasHeight: 1080,
+      },
+    });
+
+    expect(item.type).toBe('text');
+    expect(item).toMatchObject({
+      label: 'Neon',
+      color: '#00ffff',
+      fontWeight: 'bold',
+    });
+    expect(item.textShadow).toMatchObject({
+      blur: 20,
+      color: '#00ffff',
+    });
+  });
 });

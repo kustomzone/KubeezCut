@@ -41,6 +41,11 @@ import {
   findNearestAvailableSpace,
   getDefaultGeneratedLayerDurationInFrames,
 } from '@/features/editor/deps/timeline-utils';
+import {
+  PLAIN_PRESET,
+  TEXT_STYLE_PRESETS,
+  type TextStylePreset,
+} from '@/features/editor/deps/text-style-presets';
 import type { TextItem, ShapeItem, ShapeType, AdjustmentItem } from '@/types/timeline';
 import { useMaskEditorStore } from '@/features/editor/deps/preview';
 import type { VisualEffect, GpuEffect } from '@/types/effects';
@@ -150,9 +155,8 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
   // These change frequently and would cause re-renders cascading to MediaLibrary/MediaCards
   // Read from store directly in callbacks using getState()
 
-  // Add text item to timeline at the best available position
-  const handleAddText = useCallback(() => {
-    // Read all needed state from stores directly to avoid subscriptions
+  // Add text item with optional style preset (plain + Clipchamp-style grid)
+  const handleAddStyledText = useCallback((preset: TextStylePreset) => {
     const { tracks, items, fps, addItem } = useTimelineStore.getState();
     const { activeTrackId, selectItems } = useSelectionStore.getState();
     const currentProject = useProjectStore.getState().currentProject;
@@ -170,21 +174,18 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
     }
 
     const durationInFrames = getDefaultGeneratedLayerDurationInFrames(fps);
-
-    // Find the best position: start at playhead, find nearest available space
     const proposedPosition = usePlaybackStore.getState().currentFrame;
     const finalPosition = findNearestAvailableSpace(
       proposedPosition,
       durationInFrames,
       targetTrack.id,
       items
-    ) ?? proposedPosition; // Fallback to proposed if no space found
+    ) ?? proposedPosition;
 
-    // Get canvas dimensions for initial transform
     const canvasWidth = currentProject?.metadata.width ?? 1920;
     const canvasHeight = currentProject?.metadata.height ?? 1080;
 
-    const textItem: TextItem = createDefaultTextItem({
+    const base = createDefaultTextItem({
       trackId: targetTrack.id,
       from: finalPosition,
       durationInFrames,
@@ -192,10 +193,18 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
       canvasHeight,
     });
 
+    const textItem: TextItem = {
+      ...base,
+      ...preset.getItemOverrides(),
+    };
+
     addItem(textItem);
-    // Select the new item
     selectItems([textItem.id]);
   }, []);
+
+  const handleAddText = useCallback(() => {
+    handleAddStyledText(PLAIN_PRESET);
+  }, [handleAddStyledText]);
 
   // Add shape item to timeline at the best available position
   const handleAddShape = useCallback((shapeType: ShapeType) => {
@@ -357,6 +366,7 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
     label: string;
     shapeType?: ShapeType;
     effects?: VisualEffect[];
+    stylePresetId?: string;
   }) => (event: React.DragEvent<HTMLButtonElement>) => {
     event.dataTransfer.effectAllowed = 'copy';
     const dragData = {
@@ -525,24 +535,68 @@ export const MediaSidebar = memo(function MediaSidebar({ fillContainer = false }
 
           {/* Text Tab */}
           <div className={`${SCROLL_TAB_PANEL_CLASS} ${activeTab === 'text' ? 'block' : 'hidden'}`}>
-            <div className="space-y-3">
-              <button
-                draggable={true}
-                onDragStart={handleTemplateDragStart({ itemType: 'text', label: 'Text' })}
-                onDragEnd={handleTemplateDragEnd}
-                onClick={() => {
-                  if (shouldSuppressGeneratedItemClick()) return;
-                  handleAddText();
-                }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/50 transition-colors group"
-              >
-                <div className="w-9 h-9 rounded-md bg-timeline-text/20 border border-timeline-text/50 flex items-center justify-center group-hover:bg-timeline-text/30 flex-shrink-0">
-                  <Type className="w-4 h-4 text-timeline-text" />
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Plain text</p>
+                <button
+                  type="button"
+                  draggable={true}
+                  onDragStart={handleTemplateDragStart({
+                    itemType: 'text',
+                    label: PLAIN_PRESET.label,
+                    stylePresetId: PLAIN_PRESET.id,
+                  })}
+                  onDragEnd={handleTemplateDragEnd}
+                  onClick={() => {
+                    if (shouldSuppressGeneratedItemClick()) return;
+                    handleAddText();
+                  }}
+                  className="w-full rounded-lg border border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/50 transition-colors overflow-hidden text-left"
+                >
+                  <div
+                    className="flex min-h-[72px] items-center justify-center px-3 py-4"
+                    style={{ background: PLAIN_PRESET.cardBg }}
+                  >
+                    <span style={PLAIN_PRESET.previewStyle}>Text</span>
+                  </div>
+                </button>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground">Text styles</p>
                 </div>
-                <span className="text-sm text-muted-foreground group-hover:text-foreground">
-                  Add Text
-                </span>
-              </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {TEXT_STYLE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      draggable={true}
+                      onDragStart={handleTemplateDragStart({
+                        itemType: 'text',
+                        label: preset.label,
+                        stylePresetId: preset.id,
+                      })}
+                      onDragEnd={handleTemplateDragEnd}
+                      onClick={() => {
+                        if (shouldSuppressGeneratedItemClick()) return;
+                        handleAddStyledText(preset);
+                      }}
+                      className="flex flex-col rounded-lg border border-border bg-secondary/20 hover:bg-secondary/40 hover:border-primary/50 transition-colors overflow-hidden text-center"
+                    >
+                      <div
+                        className="flex min-h-[56px] items-center justify-center px-1.5 py-2"
+                        style={{ background: preset.cardBg }}
+                      >
+                        <span style={preset.previewStyle}>Text</span>
+                      </div>
+                      <span className="text-[10px] leading-tight text-muted-foreground px-1 py-1.5 truncate">
+                        {preset.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import type {
   ShapeType,
   TextItem,
 } from '@/types/timeline';
+import { getTextStylePresetOverridesById } from './text-style-presets';
 
 export const DEFAULT_GENERATED_LAYER_DURATION_SECONDS = 60;
 
@@ -14,6 +15,8 @@ export interface TimelineTemplateDragData {
   label: string;
   shapeType?: ShapeType;
   effects?: VisualEffect[];
+  /** When `itemType` is `text`, applies built-in text style preset overrides */
+  stylePresetId?: string;
 }
 
 interface LayerPlacement {
@@ -35,6 +38,12 @@ export function isTimelineTemplateDragData(value: unknown): value is TimelineTem
   if (candidate.itemType !== 'text' && candidate.itemType !== 'shape' && candidate.itemType !== 'adjustment') return false;
   if (typeof candidate.label !== 'string' || candidate.label.trim().length === 0) return false;
   if (candidate.effects !== undefined && !Array.isArray(candidate.effects)) return false;
+  if (
+    candidate.stylePresetId !== undefined
+    && (typeof candidate.stylePresetId !== 'string' || candidate.stylePresetId.trim().length === 0)
+  ) {
+    return false;
+  }
 
   return candidate.itemType !== 'shape'
     || candidate.shapeType === 'rectangle'
@@ -154,7 +163,15 @@ export function createTimelineTemplateItem(params: {
   const { template, placement } = params;
 
   if (template.itemType === 'text') {
-    return createDefaultTextItem(placement);
+    const base = createDefaultTextItem(placement);
+    const presetId = template.stylePresetId?.trim();
+    if (presetId) {
+      const overrides = getTextStylePresetOverridesById(presetId);
+      if (overrides) {
+        return { ...base, ...overrides };
+      }
+    }
+    return { ...base, label: template.label };
   }
 
   if (template.itemType === 'adjustment') {

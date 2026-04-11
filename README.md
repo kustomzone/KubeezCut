@@ -36,6 +36,8 @@ KubeezCut is a fully client-side, multi-track video editor that runs without a b
 - **Non-destructive** — full undo/redo, keyframe animation, and project bundling
 - **Private by design** — no server, no cloud, no account required
 
+**Media generation** — [Kubeez](https://kubeez.com) is the media generation platform for creating AI-generated assets you can bring into KubeezCut (see **Generate media** in [Screenshots](#screenshots)).
+
 ---
 
 ## Screenshots
@@ -47,7 +49,7 @@ Landing images live in [`public/assets/landing/`](./public/assets/landing/):
 | `timeline.png` | Multi-track timeline (video + audio, tools, waveforms) |
 | `keyframe.png` | Keyframe editor — graph / sheet / split view |
 | `projects.png` | Video settings — resolution presets (YouTube, Shorts, etc.) and custom canvas |
-| `ai-generation.png` | Kubeez **Generate media** — model catalog and prompt panel |
+| `ai-generation.png` | [Kubeez](https://kubeez.com) (**Generate media**) — model catalog and prompt panel |
 | `local-tts.png` | AI sidebar — **Text to Speech** (local WebGPU, Kitten TTS) |
 
 <div align="center">
@@ -56,7 +58,7 @@ Landing images live in [`public/assets/landing/`](./public/assets/landing/):
 |:------------------:|:---------------:|
 | ![Timeline](./public/assets/landing/timeline.png) | ![Keyframe editor](./public/assets/landing/keyframe.png) |
 
-| Video settings (project canvas) | Kubeez — Generate media |
+| Video settings (project canvas) | [Kubeez](https://kubeez.com) — Generate media |
 |:--------------------------------:|:------------------------:|
 | ![Video settings — presets and custom size](./public/assets/landing/projects.png) | ![Generate media dialog](./public/assets/landing/ai-generation.png) |
 

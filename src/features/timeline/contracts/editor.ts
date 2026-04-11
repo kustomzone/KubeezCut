@@ -28,6 +28,12 @@ export {
   createDefaultTextItem,
   getDefaultGeneratedLayerDurationInFrames,
 } from '../utils/generated-layer-items';
+export {
+  PLAIN_PRESET,
+  TEXT_STYLE_PRESETS,
+  getTextStylePresetOverridesById,
+  type TextStylePreset,
+} from '../utils/text-style-presets';
 export { findCompatibleTrackForItemType } from '../utils/track-item-compatibility';
 export { getTrackKind } from '../utils/classic-tracks';
 export { resolveEffectiveTrackStates } from '../utils/group-utils';
