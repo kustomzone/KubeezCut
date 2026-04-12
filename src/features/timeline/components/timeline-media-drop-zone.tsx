@@ -104,7 +104,7 @@ export const TimelineMediaDropZone = memo(function TimelineMediaDropZone({
   placement = 'bottom',
 }: TimelineMediaDropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const [_isExternalDragOver, setIsExternalDragOver] = useState(false);
+  const [, setIsExternalDragOver] = useState(false);
   const zoneRef = useRef<HTMLDivElement>(null);
   const externalPreviewItemsRef = useRef<PreviewEntry[] | null>(null);
   const externalPreviewSignatureRef = useRef<string | null>(null);

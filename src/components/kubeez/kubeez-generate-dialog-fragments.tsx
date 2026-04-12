@@ -1567,8 +1567,6 @@ function ModelGrid(props: {
 }
 
 export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColumn({
-  // missingKey now handled at dialog level
-  missingKey: _missingKey,
   imageModels,
   videoModels,
   musicModels,
