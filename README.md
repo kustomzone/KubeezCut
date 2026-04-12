@@ -326,6 +326,24 @@ src/
 
 ---
 
+## Built on / Inspired by
+
+KubeezCut is a combined fork — **built on top of [FreeCut](https://github.com/walterlow/freecut)** as its base, with **selected features and UX patterns adapted from [OpenCut](https://github.com/opencut-app/opencut)**, plus our own optimizations on top of both.
+
+- **[FreeCut](https://github.com/walterlow/freecut)** — base architecture. Fully client-side, non-linear editing, project bundling, and the foundation for our multi-track timeline, preview engine, and export pipeline.
+- **[OpenCut](https://github.com/opencut-app/opencut)** — source of the smooth timeline drag-and-drop UX (drag line indicators, track hit-detection, drop zone behavior) and several UI patterns we adapted into our editor.
+
+**Our additions on top:**
+
+- **Kubeez AI integration** — first-class image / video / music / TTS generation powered by the [Kubeez](https://kubeez.com) API (model picker, variant resolution, credits tracking, auto-routing edit models for reference media).
+- **WebGPU effects & transitions pipeline** — all visual effects and transitions run as WebGPU compute shaders rather than CSS filters.
+- **Performance optimizations** — RAF-throttled drag-drop, stale-while-revalidate model caching, generation ID extraction robustness, smart music/dialogue polling (all-songs-ready gating), and GPU pipeline device reuse.
+- **Professional workflow additions** — keyframe Bezier editor, GPU scopes (waveform / vectorscope / histogram), pre-compositions, project bundle ZIP export/import, frame-accurate WebCodecs export.
+
+If you like KubeezCut, please go star **[FreeCut](https://github.com/walterlow/freecut)** and **[OpenCut](https://github.com/opencut-app/opencut)** too — this project would not exist without their work.
+
+---
+
 ## License
 
 [MIT](LICENSE) — free to use, modify, and distribute.
