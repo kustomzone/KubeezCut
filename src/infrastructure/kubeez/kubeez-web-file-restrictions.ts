@@ -62,11 +62,19 @@ export function getFileLimitForModel(
     };
   }
 
+  // Kling 2.6 / 3.0 Motion Control: requires 1 image + 1 video (must be before mode-specific blocks)
+  if (model?.startsWith('kling-2-6-motion-control') || model?.startsWith('kling-3-0-motion-control')) {
+    return {
+      maxFiles: 2,
+      message: 'Motion Control requires 1 image and 1 video.',
+    };
+  }
+
   // Veo 3.1 Lite tier (standalone lite IDs or Lite selected on the unified card)
   if (
     model === 'veo3-1-lite' ||
     model.startsWith('veo3-1-lite-') ||
-    (options?.veo31Tier === 'lite' && (model === 'veo3-1-fast' || model === 'veo3-1'))
+    (options?.veo31Tier === 'lite' && model.startsWith('veo3-1-'))
   ) {
     if (generationType === 'FIRST_AND_LAST_FRAMES_2_VIDEO') {
       return {
@@ -113,12 +121,6 @@ export function getFileLimitForModel(
       model.startsWith('kling-2-6-')) &&
     generationType === 'IMAGE_2_VIDEO'
   ) {
-    if (model?.startsWith('kling-2-6-motion-control') || model?.startsWith('kling-3-0-motion-control')) {
-      return {
-        maxFiles: 2,
-        message: 'Kling 2.6 Motion Control requires 1 image and 1 video.',
-      };
-    }
     return {
       maxFiles: 1,
       message: 'Kling 2.6 Image-to-Video requires exactly 1 image.',

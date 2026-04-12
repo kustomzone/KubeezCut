@@ -16,6 +16,23 @@ import { toast } from 'sonner';
 
 const logger = createLogger('KubeezGenerateJob');
 
+/**
+ * Maps a base image model to its edit counterpart when the user attaches reference media.
+ * Models that already are edit variants or have no edit pair are returned as-is.
+ */
+const EDIT_MODEL_MAP: Record<string, string> = {
+  'flux-2-1K': 'flux-2-edit-1K',
+  'flux-2-2K': 'flux-2-edit-2K',
+  'seedream-v4': 'seedream-v4-edit',
+  'seedream-v4-5': 'seedream-v4-5-edit',
+  'grok-text-to-image': 'grok-image-to-image',
+  'qwen-text-to-image': 'qwen-image-to-image',
+};
+
+function resolveEditModelId(modelId: string): string {
+  return EDIT_MODEL_MAP[modelId] ?? modelId;
+}
+
 export type KubeezGenerateJobSnapshot = {
   apiKey: string;
   baseUrl: string | undefined;
@@ -213,12 +230,18 @@ export async function runKubeezGenerateJobInBackground(
       generationType = hasSources ? 'image-to-image' : 'text-to-image';
     }
 
+    // When the user attaches reference media, route to the edit variant of the model
+    // (e.g. flux-2-1K → flux-2-edit-1K, seedream-v4 → seedream-v4-edit).
+    const actualModelId = hasSources && !iv.isVideo
+      ? resolveEditModelId(mediaGenModelId)
+      : mediaGenModelId;
+
     const blob = await generateKubeezMediaBlob({
       apiKey,
       baseUrl,
       prompt,
       aspectRatio: iv.aspectRatio,
-      model: mediaGenModelId,
+      model: actualModelId,
       generationType,
       includeAspectRatio: iv.includeAspectRatio,
       duration:

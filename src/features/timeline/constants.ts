@@ -24,9 +24,9 @@ export const MAX_TRACK_HEIGHT = 112;
 /** Hairline between video and audio panes; drag handle uses absolute inset so 1px is enough. */
 export const TRACK_SECTION_DIVIDER_HEIGHT = 1;
 
-/** Reserved strip under last video / above last audio. 0 = flush V1/A1; add tracks via the + menu or drag to track body. */
-export const MIN_NEW_TRACK_ZONE_HEIGHT_PX = 0;
-export const MAX_NEW_TRACK_ZONE_HEIGHT_PX = 0;
+/** Reserved strip under last video / above last audio. Drop media here to spawn a new lane. */
+export const MIN_NEW_TRACK_ZONE_HEIGHT_PX = 6;
+export const MAX_NEW_TRACK_ZONE_HEIGHT_PX = 48;
 
 /** Always-visible strip at the top of the video stack to drop media and spawn a new video lane above existing tracks. */
 export const MIN_TOP_VIDEO_NEW_TRACK_DROP_ZONE_PX = 28;

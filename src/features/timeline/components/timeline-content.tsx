@@ -1065,7 +1065,7 @@ export const TimelineContent = memo(function TimelineContent({
       className="min-h-0 overflow-y-auto overflow-x-hidden"
       style={{ height: `${options.height}px` }}
     >
-      <div className="relative flex min-h-full min-w-0 flex-col">
+      <div className={`relative flex min-w-0 flex-col ${options.section === 'audio' ? 'min-h-full' : ''}`}>
         <div className="relative flex w-full min-w-0 flex-col">
           {options.section === 'video' && options.anchorTrackId && (
             <TimelineMediaDropZone
@@ -1085,17 +1085,7 @@ export const TimelineContent = memo(function TimelineContent({
             </TrackRowFrame>
           ))}
 
-          {options.section === 'video' && options.anchorTrackId && (
-            <TimelineMediaDropZone
-              height={options.zoneHeight}
-              zone="video"
-              anchorTrackId={options.anchorTrackId}
-              placement="bottom"
-            />
-          )}
-          {options.section === 'video' && !options.anchorTrackId && (
-            <div aria-hidden="true" style={{ height: `${options.zoneHeight}px` }} />
-          )}
+          {/* Video: no bottom drop zone — new video lanes are added above via the top strip. */}
 
           {options.section === 'audio' && options.anchorTrackId && (
             <TimelineMediaDropZone
@@ -1158,7 +1148,7 @@ export const TimelineContent = memo(function TimelineContent({
             {renderTrackSection(videoTracks, {
               section: 'video',
               height: videoPaneHeight,
-              zoneHeight: videoZoneHeight,
+              zoneHeight: 0,
               anchorTrackId: topZoneAnchorTrackId,
               showTopDividerForFirstTrack: true,
               scrollRef: videoTracksScrollRef,

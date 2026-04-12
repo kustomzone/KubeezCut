@@ -4,6 +4,7 @@ import {
   MAX_NEW_TRACK_ZONE_HEIGHT_PX,
   MAX_TRACK_HEIGHT,
   MIN_NEW_TRACK_ZONE_HEIGHT_PX,
+  MIN_TOP_VIDEO_NEW_TRACK_DROP_ZONE_PX,
   MIN_TRACK_HEIGHT,
   TRACK_SECTION_DIVIDER_HEIGHT,
 } from '../constants';
@@ -39,15 +40,11 @@ export function clampTrackHeight(height: number): number {
   return Math.max(MIN_TRACK_HEIGHT, Math.min(MAX_TRACK_HEIGHT, Math.round(height)));
 }
 
-/** Slack between track stack and section edge — capped so video/audio sections stay visually flush (no huge empty gap). */
+/** Drop zone height below tracks — always at least MIN so users can always drag to create new lanes. */
 export function computeNewTrackZoneHeight(paneHeight: number, contentHeight: number): number {
   const slack = paneHeight - contentHeight;
-  if (slack <= 0) return 0;
-  const desired = Math.min(
-    Math.max(MIN_NEW_TRACK_ZONE_HEIGHT_PX, slack),
-    MAX_NEW_TRACK_ZONE_HEIGHT_PX
-  );
-  return Math.min(slack, desired);
+  if (slack <= MIN_NEW_TRACK_ZONE_HEIGHT_PX) return MIN_NEW_TRACK_ZONE_HEIGHT_PX;
+  return Math.min(slack, MAX_NEW_TRACK_ZONE_HEIGHT_PX);
 }
 
 export function resizeTrackInList(
@@ -205,13 +202,10 @@ export function getTrackSectionLayout({
     minimumSectionDividerPosition,
     maximumSectionDividerPosition,
   } = getSectionDividerBounds(viewportHeight, tracks, trackTitleBarHeight);
-  // Place the split just under video tracks + the new-track strip; extra viewport height stays in the
-  // audio pane (below A1), so V1 and A1 stay flush with only the divider + strips between them.
+  // Place the split flush under video tracks + the top drop strip.
+  // No bottom zone for video (new lanes added above). Extra height → audio pane.
   const defaultSectionDividerPosition = hasTrackSections
-    ? videoSectionHeight + computeNewTrackZoneHeight(
-        videoSectionHeight + MAX_NEW_TRACK_ZONE_HEIGHT_PX,
-        videoSectionHeight
-      )
+    ? videoSectionHeight + MIN_TOP_VIDEO_NEW_TRACK_DROP_ZONE_PX
     : videoSectionHeight > 0
       ? availablePaneHeight
       : 0;

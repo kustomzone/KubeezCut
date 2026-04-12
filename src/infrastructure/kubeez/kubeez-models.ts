@@ -3,6 +3,7 @@ import {
   mergeWithCacheAugment,
   readKubeezGroupedModelsCache,
   writeKubeezGroupedModelsCache,
+  writeModelEtaCache,
 } from './kubeez-models-cache';
 import { documentedMaxReferenceFilesForModelId } from './kubeez-documented-reference-limits';
 import { applyModelRequirementFallbacks } from './kubeez-model-requirements-fallback';
@@ -60,6 +61,8 @@ export interface KubeezMediaModelOption {
    * When omitted, clients may use a conservative default.
    */
   maxReferenceFiles?: number;
+  /** Estimated generation time in seconds (from API `estimated_time_seconds`). */
+  estimatedTimeSeconds?: number;
 }
 
 /** Shown in Speech tab — uses POST /v1/generate/dialogue (no per-voice model row from API). */
@@ -130,6 +133,7 @@ interface ApiModelRow {
   display_name?: string;
   provider?: string;
   cost_per_generation?: number;
+  estimated_time_seconds?: number;
   requires_input_media?: boolean;
   generation_types?: string[];
   capabilities?: ApiCapabilities;
@@ -235,6 +239,7 @@ function normalizeImageModel(m: ApiModelRow): KubeezMediaModelOption | null {
     display_name: name || id,
     provider: typeof m.provider === 'string' ? m.provider : undefined,
     cost_per_generation: typeof m.cost_per_generation === 'number' ? m.cost_per_generation : undefined,
+    estimatedTimeSeconds: typeof m.estimated_time_seconds === 'number' ? m.estimated_time_seconds : undefined,
     prompt_max_chars: pm,
     mediaKind: 'image',
     showAspectRatio,
@@ -267,6 +272,7 @@ function normalizeVideoModel(m: ApiModelRow, hasT2V: boolean, hasI2V: boolean): 
     display_name: name || id,
     provider: typeof m.provider === 'string' ? m.provider : undefined,
     cost_per_generation: typeof m.cost_per_generation === 'number' ? m.cost_per_generation : undefined,
+    estimatedTimeSeconds: typeof m.estimated_time_seconds === 'number' ? m.estimated_time_seconds : undefined,
     prompt_max_chars: pm,
     mediaKind: 'video',
     showAspectRatio: false,
@@ -408,6 +414,7 @@ function normalizeMusicModel(m: ApiModelRow): KubeezMediaModelOption | null {
     display_name: name || id,
     provider: typeof m.provider === 'string' ? m.provider : undefined,
     cost_per_generation: typeof m.cost_per_generation === 'number' ? m.cost_per_generation : undefined,
+    estimatedTimeSeconds: typeof m.estimated_time_seconds === 'number' ? m.estimated_time_seconds : undefined,
     prompt_max_chars: pm,
     mediaKind: 'music',
     showAspectRatio: false,
@@ -567,6 +574,7 @@ export async function fetchKubeezGroupedMediaModels(params: {
 
   if (hadApiImage || hadApiVideo || hadApiMusic) {
     writeKubeezGroupedModelsCache({ imageModels, videoModels, musicModels });
+    writeModelEtaCache([...imageModels, ...videoModels, ...musicModels]);
   }
 
   return {

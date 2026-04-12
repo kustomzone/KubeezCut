@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Search, ArrowUpDown, X } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Search, ArrowUpDown, X, Film, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -188,12 +189,33 @@ export function ProjectList({ onEditProject }: ProjectListProps) {
 
       {/* Empty State - No Projects */}
       {isEmpty && (
-        <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-          <h2 className="text-3xl font-semibold text-foreground mb-2">Welcome to KubeezCut</h2>
-          <p className="text-muted-foreground max-w-md mb-6">
-            Get started by creating your first video project. Choose your resolution, frame rate, and
-            start editing!
+        <div className="flex flex-col items-center justify-center py-24 px-4 text-center">
+          <div className="relative mb-8">
+            <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <Film className="w-10 h-10 text-primary/80" />
+            </div>
+            <div className="absolute -bottom-1.5 -right-1.5 w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/25">
+              <Plus className="w-4 h-4 text-primary-foreground" />
+            </div>
+          </div>
+
+          <h2 className="text-2xl font-semibold text-foreground mb-2">No projects yet</h2>
+          <p className="text-muted-foreground max-w-sm mb-8 leading-relaxed">
+            Create your first video project to get started. Choose your resolution,
+            frame rate, and jump straight into the editor.
           </p>
+
+          <div className="flex flex-col items-center gap-3">
+            <Link to="/projects/new">
+              <Button size="lg" className="gap-2 px-6">
+                <Plus className="w-4 h-4" />
+                Create New Project
+              </Button>
+            </Link>
+            <p className="text-xs text-muted-foreground">
+              or import an existing project using the button above
+            </p>
+          </div>
         </div>
       )}
 

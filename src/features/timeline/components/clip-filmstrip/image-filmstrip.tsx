@@ -215,7 +215,7 @@ export const ImageFilmstrip = memo(function ImageFilmstrip({
             height,
             backgroundImage: `url(${resolvedSrc})`,
             backgroundRepeat: 'repeat-x',
-            backgroundSize: `${tileWidth}px ${height}px`,
+            backgroundSize: `auto ${height}px`,
             backgroundPosition: 'left center',
           }}
         />

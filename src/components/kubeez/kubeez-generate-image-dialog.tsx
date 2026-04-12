@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { KUBEEZ_BRAND_LOGO_URL } from '@/components/brand/kubeez-cut-logo';
 import {
   Dialog,
   DialogContent,
@@ -13,12 +14,14 @@ import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { KUBEEZ_BRAND_LOGO_URL } from '@/components/brand/kubeez-cut-logo';
 import {
+  AspectRatioIcon,
   KubeezGenerateModelsColumn,
   KubeezGeneratePromptField,
   KubeezGenerateSelectedModelPanel,
@@ -59,7 +62,8 @@ import {
   KUBEEZ_SPEECH_DIALOGUE_MODEL,
   type KubeezMediaModelOption,
 } from '@/infrastructure/kubeez/kubeez-models';
-import { readKubeezGroupedModelsCache } from '@/infrastructure/kubeez/kubeez-models-cache';
+import { readKubeezGroupedModelsCache, isModelsCacheFresh } from '@/infrastructure/kubeez/kubeez-models-cache';
+import { useKubeezCredits } from '@/infrastructure/kubeez/kubeez-credits';
 
 const KUBEEZ_OFFLINE_BROWSE = getKubeezOfflineBrowseCatalog();
 import type { KubeezModelSettings } from '@/infrastructure/kubeez/model-family-registry';
@@ -125,6 +129,31 @@ type ReferenceAttachment = {
   previewUrl: string | null;
 };
 
+/** Models that accept a `quality` POST body field (basic = standard res, high = max res). */
+const SEEDREAM_QUALITY_MODEL_IDS = new Set([
+  'seedream-v4-5', 'seedream-v4-5-edit',
+  '5-lite-text-to-image', '5-lite-image-to-image',
+]);
+
+function isSeedreamQualityModel(modelId: string): boolean {
+  return SEEDREAM_QUALITY_MODEL_IDS.has(modelId);
+}
+
+/** Label for the quality tiers per model family. */
+function getQualityOptions(modelId: string): { value: 'basic' | 'high'; label: string }[] {
+  if (modelId.startsWith('5-lite')) {
+    return [
+      { value: 'basic', label: '2K' },
+      { value: 'high', label: '3K' },
+    ];
+  }
+  // seedream-v4-5
+  return [
+    { value: 'basic', label: '2K' },
+    { value: 'high', label: '4K' },
+  ];
+}
+
 export interface KubeezGenerateImageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -146,6 +175,12 @@ export function KubeezGenerateImageDialog({
   };
   const fps = useTimelineStore((s) => s.fps);
 
+  const { credits: userCredits, refresh: refreshCredits, deduct: deductCredits } = useKubeezCredits({
+    apiKey: kubeezApiKey ?? '',
+    baseUrl: kubeezApiBaseUrl ?? undefined,
+    enabled: open && !!kubeezApiKey,
+  });
+
   const promptRef = useRef('');
   const [promptResetKey, setPromptResetKey] = useState(0);
   const openWasFalse = useRef(true);
@@ -164,6 +199,7 @@ export function KubeezGenerateImageDialog({
   const [dialogueVoice, setDialogueVoice] = useState(KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID);
   const [dialogueLanguage, setDialogueLanguage] = useState('auto');
   const [dialogueStability, setDialogueStability] = useState('0.5');
+  const [imageQuality, setImageQuality] = useState<'basic' | 'high'>('basic');
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelTab, setModelTab] = useState<ModelTab>('all');
   const [referenceAttachments, setReferenceAttachments] = useState<ReferenceAttachment[]>([]);
@@ -328,11 +364,51 @@ export function KubeezGenerateImageDialog({
             ) ?? null;
           variants = hit ? [hit] : [];
         }
-        return resolveGenerationModelId({
+
+        const resolvedId = resolveGenerationModelId({
           baseCardId: cur.baseCardId,
           settings: nextSettings,
           variants,
         });
+
+        // General fallback guard: if the resolved model ID round-trips back
+        // to different settings than the user intended, a variant-not-found
+        // fallback occurred. Preserve the user's intended settings in
+        // dialogModelSettings so the UI reflects their choice, and keep
+        // selectedModelId unchanged.
+        if (cur.registryEntry) {
+          const parsed = resolveSelectionFromConcreteModelId(
+            resolvedId, imageModels, videoModels, musicModels
+          );
+          const patchKeys = Object.keys(patch) as Array<keyof KubeezModelSettings>;
+          const fallbackChanged = patchKeys.some((key) =>
+            JSON.stringify(nextSettings[key]) !== JSON.stringify(parsed.settings[key])
+          );
+
+          if (fallbackChanged) {
+            const override: Partial<KubeezModelSettings> = {};
+            for (const key of patchKeys) {
+              (override as Record<string, unknown>)[key] = nextSettings[key];
+            }
+            setDialogModelSettings((s) => ({ ...s, ...override }));
+            return prev;
+          }
+
+          // Exact match — clear any previous overrides for the patched keys
+          setDialogModelSettings((s) => {
+            const next = { ...s };
+            let changed = false;
+            for (const key of patchKeys) {
+              if (key in next) {
+                delete (next as Record<string, unknown>)[key];
+                changed = true;
+              }
+            }
+            return changed ? next : s;
+          });
+        }
+
+        return resolvedId;
       });
     },
     [imageModels, videoModels, musicModels, speechModels]
@@ -395,6 +471,13 @@ export function KubeezGenerateImageDialog({
     effectiveSettings,
     jobGenerationVariants,
   ]);
+
+  /** Cost for the concrete model variant that will be used on generate. */
+  const generationCost = useMemo((): number | undefined => {
+    const genModel = allModels.find((m) => m.model_id === mediaGenModelIdForDialog);
+    if (typeof genModel?.cost_per_generation === 'number') return genModel.cost_per_generation;
+    return uiModel?.cost_per_generation;
+  }, [allModels, mediaGenModelIdForDialog, uiModel?.cost_per_generation]);
 
   const referenceFileLimit = useMemo(
     () =>
@@ -628,6 +711,13 @@ export function KubeezGenerateImageDialog({
     // Instant UI from localStorage cache; only block the grid on first load with no cache.
     setModelsLoading(!hydratedFromCache);
 
+    // If cache is fresh (< 5 min), skip the live API call entirely.
+    // Prices rarely change — this prevents unnecessary fetches on every dialog open.
+    if (hydratedFromCache && isModelsCacheFresh()) {
+      setModelsLoading(false);
+      return () => { cancelled = true; ac.abort(); };
+    }
+
     fetchKubeezGroupedMediaModels({
       apiKey,
       baseUrl: kubeezApiBaseUrl?.trim() || undefined,
@@ -826,6 +916,7 @@ export function KubeezGenerateImageDialog({
         filterMimeCategory,
         createdAt: Date.now(),
         status: 'generating',
+        estimatedTimeSeconds: uiModel.estimatedTimeSeconds,
       });
 
       const playheadFrame = Math.max(0, Math.round(usePlaybackStore.getState().currentFrame));
@@ -885,7 +976,9 @@ export function KubeezGenerateImageDialog({
             quality:
               mediaGenModelId === 'p-image-edit' && (submitSettings.pImageEditTurbo ?? true)
                 ? 'turbo'
-                : undefined,
+                : isSeedreamQualityModel(mediaGenModelId)
+                  ? imageQuality
+                  : undefined,
           },
           timelinePlacement,
           playheadFrame,
@@ -896,7 +989,11 @@ export function KubeezGenerateImageDialog({
       }
 
       toast.message('Generating in background — watch the library for progress.');
-      onOpenChange(false);
+      if (typeof generationCost === 'number') {
+        deductCredits(generationCost);
+      } else {
+        refreshCredits();
+      }
       setPromptResetKey((k) => k + 1);
       setReferenceAttachments((prev) => {
         for (const r of prev) {
@@ -925,6 +1022,7 @@ export function KubeezGenerateImageDialog({
     dialogueStability,
     dialogueVoice,
     fps,
+    imageQuality,
     imageModels,
     kubeezApiBaseUrl,
     kubeezApiKey,
@@ -941,6 +1039,9 @@ export function KubeezGenerateImageDialog({
     videoModels,
     referenceRequirementBlocked,
     dialogModelSettings,
+    generationCost,
+    deductCredits,
+    refreshCredits,
   ]);
 
   const addReferenceFiles = useCallback((fileList: FileList | File[]) => {
@@ -1207,80 +1308,60 @@ export function KubeezGenerateImageDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="duration-300 ease-out motion-reduce:duration-100"
-        className="flex max-h-[min(94vh,920px)] w-[min(98vw,92rem)] max-w-[min(98vw,92rem)] flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 shadow-2xl shadow-black/50 sm:rounded-2xl
+        className="flex h-[min(94vh,860px)] w-[min(96vw,64rem)] max-w-[min(96vw,64rem)] flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 shadow-2xl shadow-black/50 sm:rounded-2xl
           duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
           data-[state=open]:zoom-in-[0.98] data-[state=closed]:zoom-out-[0.98]
           data-[state=open]:slide-in-from-bottom-4 data-[state=closed]:slide-out-to-bottom-3
           motion-reduce:duration-150 motion-reduce:data-[state=open]:slide-in-from-bottom-0 motion-reduce:data-[state=closed]:slide-out-to-bottom-0 motion-reduce:data-[state=open]:zoom-in-100 motion-reduce:data-[state=closed]:zoom-out-100"
       >
-        <div className="shrink-0 space-y-3 border-b border-border/80 bg-muted/25 px-4 py-3 sm:px-5">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-card/90 p-1.5 shadow-inner shadow-black/20">
-              <img
-                src={KUBEEZ_BRAND_LOGO_URL}
-                alt="Kubeez"
-                width={36}
-                height={36}
-                decoding="async"
-                className="h-8 w-auto max-w-full object-contain"
-              />
-            </div>
-            <DialogHeader className="flex-1 space-y-1 text-left">
-              <DialogTitle className="text-base font-semibold leading-tight">Generate media</DialogTitle>
-              <DialogDescription className="text-xs leading-snug text-muted-foreground">
-                {libraryOnly ? (
-                  <>
-                    Powered by Kubeez. New media is saved to this project&apos;s library; drag clips to the timeline
-                    when you&apos;re ready.
-                  </>
-                ) : (
-                  <>
-                    Powered by Kubeez. New media is placed on track &ldquo;{timelinePlacement.trackName}&rdquo; at the
-                    playhead.
-                  </>
-                )}
+        <div className="flex shrink-0 items-center justify-between border-b border-border/80 bg-muted/15 px-4 py-2 sm:px-5">
+          <div className="flex items-center gap-2.5">
+            <img
+              src={KUBEEZ_BRAND_LOGO_URL}
+              alt="Kubeez"
+              width={28}
+              height={28}
+              decoding="async"
+              className="h-7 w-7 shrink-0 rounded-lg object-contain"
+            />
+            <DialogHeader className="space-y-0 text-left">
+              <DialogTitle className="text-sm font-semibold leading-tight">Generate media</DialogTitle>
+              <DialogDescription className="text-[11px] text-muted-foreground">
+                {libraryOnly ? 'Saved to library' : `Track \u201c${timelinePlacement.trackName}\u201d`}
+                {' \u00b7 Powered by Kubeez'}
               </DialogDescription>
             </DialogHeader>
           </div>
+          <div className="flex items-center gap-2" />
+        </div>
 
-          {missingKey && (
+        {missingKey && (
+          <div className="mx-4 mt-3 sm:mx-5">
             <div
-              className="flex gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2.5 shadow-sm"
+              className="flex gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs"
               role="status"
               aria-live="polite"
             >
-              <Info
-                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-              <div className="min-w-0 space-y-1">
-                <p className="text-sm font-medium text-foreground">Add a Kubeez API key</p>
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Keys are created on{' '}
-                  <a
-                    href="https://kubeez.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-foreground underline underline-offset-2 hover:text-primary"
-                  >
-                    kubeez.com
-                  </a>
-                  . Paste it in{' '}
-                  <Link
-                    {...SETTINGS_KUBEEZ_API_LINK_PROPS}
-                    onClick={markReopenGenerateAfterSettings}
-                    className="text-foreground underline underline-offset-2 hover:text-primary"
-                  >
-                    Settings
-                  </Link>{' '}
-                  (Kubeez) to sync models and generate.
-                </p>
-              </div>
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <p className="text-muted-foreground">
+                Add a Kubeez API key in{' '}
+                <Link
+                  {...SETTINGS_KUBEEZ_API_LINK_PROPS}
+                  onClick={markReopenGenerateAfterSettings}
+                  className="text-foreground underline underline-offset-2 hover:text-primary"
+                >
+                  Settings
+                </Link>{' '}
+                to generate. Get one at{' '}
+                <a href="https://kubeez.com" target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-2 hover:text-primary">
+                  kubeez.com
+                </a>.
+              </p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden px-4 py-3 sm:px-5 lg:flex-row lg:items-stretch">
+        <div className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden px-3 py-2.5 sm:px-4 lg:flex-row lg:items-stretch">
           <KubeezGenerateModelsColumn
             missingKey={missingKey}
             imageModels={imageModels}
@@ -1296,8 +1377,8 @@ export function KubeezGenerateImageDialog({
             modelsLoading={modelsLoading}
           />
 
-          <div className="mt-4 flex min-h-0 w-full min-w-0 flex-1 flex-col border-t border-border/50 pt-4 lg:mt-0 lg:w-[min(100%,24rem)] lg:flex-none lg:self-stretch lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
+          <div className="mt-3 flex min-h-0 w-full min-w-0 flex-1 flex-col border-t border-border/50 pt-3 lg:mt-0 lg:w-72 lg:flex-none lg:self-stretch lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <KubeezGenerateSelectedModelPanel
               model={uiModel ?? null}
               selectedModelId={selectedModelId}
@@ -1311,6 +1392,7 @@ export function KubeezGenerateImageDialog({
               videoFooterHint={videoFooterHint}
               busy={isStartingJob}
               modelsLoading={modelsLoading}
+              generationCost={generationCost}
             />
             <KubeezGeneratePromptField
               key={`${promptFieldGroup}-${promptResetKey}`}
@@ -1349,12 +1431,26 @@ export function KubeezGenerateImageDialog({
                     <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="max-h-[min(280px,50vh)]">
-                      {KUBEEZ_DIALOGUE_VOICE_OPTIONS.map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.label}
-                        </SelectItem>
-                      ))}
+                    <SelectContent className="max-h-[min(340px,50vh)]">
+                      {(() => {
+                        const groups = new Map<string, typeof KUBEEZ_DIALOGUE_VOICE_OPTIONS>();
+                        for (const v of KUBEEZ_DIALOGUE_VOICE_OPTIONS) {
+                          const cat = v.category ?? 'Other';
+                          let list = groups.get(cat);
+                          if (!list) { list = []; groups.set(cat, list); }
+                          list.push(v);
+                        }
+                        return [...groups.entries()].map(([cat, voices]) => (
+                          <SelectGroup key={cat}>
+                            <SelectLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">{cat}</SelectLabel>
+                            {voices.map((v) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ));
+                      })()}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1579,12 +1675,12 @@ export function KubeezGenerateImageDialog({
                         </Button>
                       </div>
                     </div>
-                    {typeof uiModel?.cost_per_generation === 'number' && (
+                    {typeof generationCost === 'number' && (
                       <div className="shrink-0 self-center rounded-full border border-border/70 bg-muted/35 px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         <span className="text-sm font-bold leading-none text-foreground tabular-nums">
-                          {uiModel.cost_per_generation}
+                          {generationCost}
                         </span>{' '}
-                        credits/sec
+                        credits
                       </div>
                     )}
                   </div>
@@ -1755,34 +1851,79 @@ export function KubeezGenerateImageDialog({
             {showAspectRatioControl && aspectChoices.length > 0 && (
               <div className="shrink-0 space-y-2">
                 <Label className="text-foreground/90">Aspect ratio</Label>
-                <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={isStartingJob}>
-                  <SelectTrigger className="border-border/70 bg-card/50 shadow-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {aspectChoices.map((ar) => (
-                      <SelectItem key={ar} value={ar}>
+                <div className="flex flex-wrap gap-1">
+                  {aspectChoices.map((ar) => {
+                    const active = aspectRatio === ar;
+                    return (
+                      <Button
+                        key={ar}
+                        type="button"
+                        size="sm"
+                        variant={active ? 'default' : 'outline'}
+                        disabled={isStartingJob}
+                        className="h-7 gap-1.5 px-2 text-[11px]"
+                        onClick={() => setAspectRatio(ar)}
+                      >
+                        <AspectRatioIcon ratio={ar} active={active} />
                         {ar}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {!isVideoModel && !isMusicModel && !isSpeechModel && uiModel && isSeedreamQualityModel(mediaGenModelIdForDialog) && (
+              <div className="shrink-0 space-y-2">
+                <Label className="text-foreground/90">Quality</Label>
+                <div className="flex flex-wrap gap-1">
+                  {getQualityOptions(mediaGenModelIdForDialog).map((opt) => {
+                    const active = imageQuality === opt.value;
+                    return (
+                      <Button
+                        key={opt.value}
+                        type="button"
+                        size="sm"
+                        variant={active ? 'default' : 'outline'}
+                        disabled={isStartingJob}
+                        className="h-7 min-w-[3rem] px-2 text-[11px]"
+                        onClick={() => setImageQuality(opt.value)}
+                      >
+                        {opt.label}
+                      </Button>
+                    );
+                  })}
+                </div>
               </div>
             )}
             </div>
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-border bg-muted/10 px-4 py-2.5 sm:px-5 sm:gap-0">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isStartingJob}>
+        <DialogFooter className="shrink-0 items-center gap-2 border-t border-border bg-muted/10 px-4 py-2 sm:px-5">
+          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={isStartingJob}>
             Cancel
           </Button>
-          <Button type="button" onClick={() => void handleSubmit()} disabled={isStartingJob || missingKey || referenceRequirementBlocked}>
+
+          {typeof userCredits === 'number' && (
+            <div className="flex items-center gap-1.5 rounded-full border border-border/50 bg-card/40 px-2.5 py-0.5">
+              <span className="text-xs font-bold tabular-nums text-foreground">{Math.floor(userCredits).toLocaleString()}</span>
+              <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">credits</span>
+            </div>
+          )}
+
+          <div className="flex-1" />
+          <Button type="button" size="sm" onClick={() => void handleSubmit()} disabled={isStartingJob || missingKey || referenceRequirementBlocked}>
             {isStartingJob
               ? 'Starting…'
               : libraryOnly
                 ? 'Generate & add to library'
-                : 'Generate & add to timeline'}
+                : 'Generate'}
+            {!isStartingJob && typeof generationCost === 'number' && (
+              <span className="ml-1.5 rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums">
+                {generationCost} cr
+              </span>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

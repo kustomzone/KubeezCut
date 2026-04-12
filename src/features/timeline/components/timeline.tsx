@@ -829,7 +829,7 @@ export const Timeline = memo(function Timeline({ duration }: TimelineProps) {
                   {renderTrackHeadersSection(videoTracks, {
                     section: 'video',
                     height: videoPaneHeight,
-                    zoneHeight: videoZoneHeight,
+                    zoneHeight: 0,
                     scrollRef: videoTrackHeadersScrollRef,
                     dropIndicatorLocalIndex: videoDropIndicatorIndex,
                     showTopDividerForFirstTrack: true,

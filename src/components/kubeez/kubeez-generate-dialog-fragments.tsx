@@ -28,18 +28,53 @@ import {
   type KubeezModelFamilyGridItem,
   type KubeezModelGridItem,
 } from '@/infrastructure/kubeez/kubeez-video-model-variants';
-import { Link } from '@tanstack/react-router';
-import { SETTINGS_KUBEEZ_API_LINK_PROPS } from '@/config/settings-kubeez-api';
-import { markKubeezGenerateReopenAfterSettings } from '@/shared/state/kubeez-generate-dialog';
-import { useProjectStore } from '@/features/projects/stores/project-store';
 import { Check, Clapperboard, ImageIcon, LayoutGrid, Loader2, Mic, Music2, Search } from 'lucide-react';
 import { cn } from '@/shared/ui/cn';
 
 export type ModelTab = 'all' | 'image' | 'video' | 'music' | 'speech';
 
-/** Wide catalog-first layout: dense columns so browsing stays primary. */
 const MODEL_GRID_CLASS =
-  'grid grid-cols-1 items-stretch gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5';
+  'grid grid-cols-2 items-stretch gap-2 sm:grid-cols-3';
+
+/** Visual rectangle icon showing the aspect ratio shape. */
+export function AspectRatioIcon({ ratio, active }: { ratio: string; active: boolean }) {
+  if (ratio === 'auto') return null;
+  const parts = ratio.split(':').map(Number);
+  const w = parts[0] ?? 1;
+  const h = parts[1] ?? 1;
+  const isSquare = w === h;
+  const isPortrait = h > w;
+  const style: React.CSSProperties = isSquare
+    ? { width: 12, height: 12, borderRadius: 2 }
+    : isPortrait
+      ? { width: 9, height: 14, borderRadius: 2 }
+      : { width: 14, height: 9, borderRadius: 2 };
+  return (
+    <div
+      className={cn(
+        'shrink-0 border-[1.5px]',
+        active
+          ? 'border-primary-foreground bg-primary-foreground/20'
+          : 'border-foreground/40 bg-foreground/10',
+      )}
+      style={style}
+    />
+  );
+}
+
+/** Edit variants that are auto-routed when the user attaches media — hide from the variant picker. */
+const AUTO_ROUTED_EDIT_IDS = new Set([
+  'flux-2-edit-1K',
+  'flux-2-edit-2K',
+  'seedream-v4-edit',
+  'seedream-v4-5-edit',
+  'grok-image-to-image',
+  'qwen-image-to-image',
+]);
+
+function isAutoRoutedEditVariant(modelId: string): boolean {
+  return AUTO_ROUTED_EDIT_IDS.has(modelId);
+}
 
 function modelMatchesSearch(m: KubeezMediaModelOption, needle: string): boolean {
   if (!needle) return true;
@@ -191,10 +226,10 @@ function ModelCardShell(props: {
         <span
           className={cn(
             'absolute left-1.5 top-1.5 z-10 rounded-full border px-1.5 py-px text-[8px] font-bold uppercase tracking-wider shadow-sm backdrop-blur-sm',
-            isVideo && 'border-violet-500/30 bg-violet-950/55 text-violet-100',
-            isMusic && 'border-amber-500/30 bg-amber-950/55 text-amber-100',
-            isSpeech && 'border-sky-500/30 bg-sky-950/55 text-sky-100',
-            isImage && 'border-emerald-500/30 bg-emerald-950/55 text-emerald-100'
+            isVideo && 'border-primary/30 bg-primary/10 text-primary-foreground',
+            isMusic && 'border-primary/30 bg-primary/10 text-primary-foreground',
+            isSpeech && 'border-primary/30 bg-primary/10 text-primary-foreground',
+            isImage && 'border-primary/30 bg-primary/10 text-primary-foreground'
           )}
         >
           {kindLabel}
@@ -203,9 +238,9 @@ function ModelCardShell(props: {
           <span
             className={cn(
               'absolute right-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full shadow-md ring-2 ring-background',
-              isVideo && 'bg-violet-600 text-white',
-              isMusic && 'bg-amber-600 text-white',
-              isSpeech && 'bg-sky-600 text-white',
+              isVideo && 'bg-primary text-primary-foreground',
+              isMusic && 'bg-primary text-primary-foreground',
+              isSpeech && 'bg-primary text-primary-foreground',
               isImage && 'bg-primary text-primary-foreground'
             )}
           >
@@ -238,26 +273,8 @@ function ModelCardShell(props: {
     onSelect &&
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
     disabled && 'pointer-events-none opacity-50',
-    selected &&
-      isVideo &&
-      'border-violet-400/50 shadow-lg shadow-violet-500/20 ring-1 ring-violet-400/35 dark:border-violet-500/45',
-    selected &&
-      isMusic &&
-      'border-amber-400/50 shadow-lg shadow-amber-500/20 ring-1 ring-amber-400/35 dark:border-amber-500/45',
-    selected &&
-      isSpeech &&
-      'border-sky-400/50 shadow-lg shadow-sky-500/20 ring-1 ring-sky-400/35 dark:border-sky-500/45',
-    selected && isImage && 'border-primary/50 shadow-lg shadow-primary/20 ring-1 ring-primary/40',
-    !selected &&
-      isVideo &&
-      'border-violet-500/20 dark:border-violet-800/40',
-    !selected &&
-      isMusic &&
-      'border-amber-500/20 dark:border-amber-800/35',
-    !selected &&
-      isSpeech &&
-      'border-sky-500/20 dark:border-sky-800/35',
-    !selected && isImage && 'border-border/50'
+    selected && 'border-primary/50 shadow-lg shadow-primary/20 ring-1 ring-primary/40',
+    !selected && 'border-border/50'
   );
 
   if (onSelect) {
@@ -349,10 +366,10 @@ function videoResolutionChipLabel(resolution: string): string {
 function kindBadgeClass(kind: KubeezMediaModelOption['mediaKind']) {
   return cn(
     'rounded px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide',
-    kind === 'video' && 'bg-violet-500/20 text-violet-800 dark:text-violet-200',
-    kind === 'image' && 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-200',
-    kind === 'music' && 'bg-amber-500/20 text-amber-900 dark:text-amber-100',
-    kind === 'speech' && 'bg-sky-500/20 text-sky-900 dark:text-sky-100'
+    kind === 'video' && 'bg-primary/15 text-primary',
+    kind === 'image' && 'bg-primary/15 text-primary',
+    kind === 'music' && 'bg-primary/15 text-primary',
+    kind === 'speech' && 'bg-primary/15 text-primary'
   );
 }
 
@@ -371,6 +388,8 @@ export interface KubeezGenerateSelectedModelPanelProps {
   videoFooterHint: string | null;
   busy: boolean;
   modelsLoading: boolean;
+  /** Resolved cost for the concrete variant that will be used on generate. */
+  generationCost?: number;
 }
 
 export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSelectedModelPanel({
@@ -386,19 +405,16 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
   videoFooterHint,
   busy,
   modelsLoading,
+  generationCost,
 }: KubeezGenerateSelectedModelPanelProps) {
   const disabled = busy || modelsLoading;
 
   const costLabel =
-    model && typeof model.cost_per_generation === 'number' ? `${model.cost_per_generation} cr` : null;
-
-  const videoModes =
-    model?.mediaKind === 'video'
-      ? [
-          model.supportsTextToVideo && 'Text-to-video',
-          model.supportsImageToVideo && 'Image-to-video',
-        ].filter(Boolean)
-      : [];
+    typeof generationCost === 'number'
+      ? `${generationCost} cr`
+      : model && typeof model.cost_per_generation === 'number'
+        ? `${model.cost_per_generation} cr`
+        : null;
 
   const familyVariant = modelFamilyItem
     ? (modelFamilyItem.variants.find((v) => v.model_id === selectedModelId) ??
@@ -488,6 +504,7 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
     tier: 'fast' as const,
     mode: 'text-to-video' as const,
   };
+
   const wan25 = modelSettings.wan25 ?? {
     useSimpleCatalogId: true,
     source: 'text' as const,
@@ -514,9 +531,9 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
           { mode: 'image-to-video' as const, label: 'Image-to-video' },
         ] as const);
   const simpleVariantsSorted = modelFamilyItem
-    ? [...modelFamilyItem.variants].sort(
-        (a, b) => (a.cost_per_generation ?? Infinity) - (b.cost_per_generation ?? Infinity)
-      )
+    ? [...modelFamilyItem.variants]
+        .filter((v) => !isAutoRoutedEditVariant(v.model_id))
+        .sort((a, b) => (a.cost_per_generation ?? Infinity) - (b.cost_per_generation ?? Infinity))
     : [];
   const simpleVariantTitle = (v: KubeezMediaModelOption) => {
     const dup =
@@ -529,37 +546,17 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
   }
 
   return (
-    <div className="shrink-0 space-y-2 rounded-lg border border-border/60 bg-muted/15 px-2.5 py-2 shadow-inner shadow-black/10">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Selected model</p>
-          <p className="text-[13px] font-semibold leading-snug text-foreground">{model.display_name}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={kindBadgeClass(model.mediaKind)}>{kindLabelText(model.mediaKind)}</span>
-            {(model.provider || costLabel) && (
-              <p className="text-[11px] text-muted-foreground">
-                {model.provider && <span>{model.provider}</span>}
-                {model.provider && costLabel && <span className="text-muted-foreground/40"> · </span>}
-                {costLabel && <span className="tabular-nums text-foreground/70">~{costLabel}</span>}
-              </p>
-            )}
-          </div>
+    <div className="shrink-0 space-y-2">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold leading-tight text-foreground">{model.display_name}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {model.provider}
+            {costLabel && <> · <span className="tabular-nums text-foreground/70">{costLabel}</span></>}
+          </p>
         </div>
+        <span className={cn(kindBadgeClass(model.mediaKind), 'shrink-0')}>{kindLabelText(model.mediaKind)}</span>
       </div>
-
-      {model.prompt_max_chars !== undefined && (
-        <p className="text-[11px] leading-snug text-muted-foreground">
-          Max prompt length:{' '}
-          <span className="tabular-nums font-medium text-foreground/80">{model.prompt_max_chars}</span> characters
-        </p>
-      )}
-
-      {model.mediaKind === 'video' && videoModes.length > 0 && (
-        <p className="text-[11px] leading-snug text-muted-foreground">
-          {videoModes.join(' · ')}
-          {model.supports_sound ? ' · Generated audio supported for applicable variants.' : ''}
-        </p>
-      )}
 
       {modelFamilyItem?.baseCardId === 'nano-banana-2' || modelFamilyItem?.baseCardId === 'nano-banana-pro' ? (
         <div className="space-y-2 border-t border-border/50 pt-3">
@@ -1438,11 +1435,12 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
                   size="sm"
                   variant={active ? 'default' : 'outline'}
                   disabled={disabled || videoAspectUi.force16x9}
-                  className="h-7 min-w-[2.75rem] px-2 text-[11px]"
+                  className="h-7 gap-1.5 px-2 text-[11px]"
                   onClick={() =>
                     onVideoAspectRatioChange(opt.value === 'auto' ? 'auto' : opt.value)
                   }
                 >
+                  <AspectRatioIcon ratio={opt.value} active={active} />
                   {opt.label}
                 </Button>
               );
@@ -1485,7 +1483,7 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
       )}
 
       {videoFooterHint && (
-        <p className="text-xs leading-snug text-violet-600 dark:text-violet-400">{videoFooterHint}</p>
+        <p className="text-xs leading-snug text-primary/80">{videoFooterHint}</p>
       )}
     </div>
   );
@@ -1569,7 +1567,8 @@ function ModelGrid(props: {
 }
 
 export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColumn({
-  missingKey,
+  // missingKey now handled at dialog level
+  missingKey: _missingKey,
   imageModels,
   videoModels,
   musicModels,
@@ -1582,25 +1581,8 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
   busy,
   modelsLoading,
 }: KubeezGenerateModelsColumnProps) {
-  const currentProjectId = useProjectStore((s) => s.currentProject?.id);
-  const markReopenGenerateAfterSettings = () => {
-    if (currentProjectId) markKubeezGenerateReopenAfterSettings(currentProjectId);
-  };
-
   const [modelSearch, setModelSearch] = useState('');
   const searchNeedle = modelSearch.trim();
-
-  /** Tab badges: collapsed grid cards (families), not raw API row counts. */
-  const gridCardCounts = useMemo(
-    () => ({
-      all: buildKubeezModelGridItems(allModelsSorted).length,
-      image: buildKubeezModelGridItems(imageModels).length,
-      video: buildKubeezModelGridItems(videoModels).length,
-      music: buildKubeezModelGridItems(musicModels).length,
-      speech: buildKubeezModelGridItems(speechModels).length,
-    }),
-    [allModelsSorted, imageModels, videoModels, musicModels, speechModels]
-  );
 
   const filteredLists = useMemo(() => {
     const f = (list: KubeezMediaModelOption[]) =>
@@ -1625,43 +1607,9 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
     [filteredLists]
   );
 
-  const filteredGridItems =
-    modelTab === 'all'
-      ? gridItemsByTab.all
-      : modelTab === 'image'
-        ? gridItemsByTab.image
-        : modelTab === 'video'
-          ? gridItemsByTab.video
-          : modelTab === 'music'
-            ? gridItemsByTab.music
-            : gridItemsByTab.speech;
-
   return (
-    <div className="flex min-h-0 max-h-[min(42vh,320px)] flex-1 flex-col border-b border-border pb-4 lg:max-h-none lg:min-h-0 lg:min-w-0 lg:border-b-0 lg:border-r lg:border-border/60 lg:pb-0 lg:pr-4">
-      {missingKey && (
-        <p className="mb-2 shrink-0 text-sm text-muted-foreground">
-          Browse the full Kubeez catalog below (same as on{' '}
-          <a
-            href="https://kubeez.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-2"
-          >
-            kubeez.com
-          </a>
-          ). Get an API key there, then add it in{' '}
-          <Link
-            {...SETTINGS_KUBEEZ_API_LINK_PROPS}
-            onClick={markReopenGenerateAfterSettings}
-            className="text-primary underline underline-offset-2"
-          >
-            Settings
-          </Link>{' '}
-          to sync live models from the API and generate.
-        </p>
-      )}
-
-      <div className="flex min-h-0 flex-1 flex-col space-y-2 overflow-hidden">
+    <div className="flex min-h-0 max-h-[min(42vh,300px)] flex-1 flex-col border-b border-border/50 pb-3 lg:max-h-none lg:min-h-0 lg:min-w-0 lg:border-b-0 lg:border-r lg:border-border/40 lg:pb-0 lg:pr-3">
+      <div className="flex min-h-0 flex-1 flex-col space-y-1.5 overflow-hidden">
         {modelsLoading && (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -1676,54 +1624,44 @@ export const KubeezGenerateModelsColumn = memo(function KubeezGenerateModelsColu
           onValueChange={(v) => onModelTabChange(v as ModelTab)}
           className="flex min-h-0 w-full flex-1 flex-col overflow-hidden"
         >
-          <TabsList className="flex h-auto w-full shrink-0 flex-wrap justify-start gap-1 rounded-xl border border-border/50 bg-muted/30 p-1 shadow-inner shadow-black/15 sm:flex-nowrap">
-            <TabsTrigger value="all" className="gap-1.5 px-2.5 sm:px-3">
-              <LayoutGrid className="h-3.5 w-3.5 opacity-70" />
+          <TabsList className="flex h-auto w-full shrink-0 justify-start gap-0.5 rounded-lg bg-muted/40 p-0.5">
+            <TabsTrigger value="all" className="gap-1 rounded-md px-2.5 py-1 text-xs">
+              <LayoutGrid className="h-3 w-3 opacity-70" />
               All
-              <span className="tabular-nums text-muted-foreground">({gridCardCounts.all})</span>
             </TabsTrigger>
-            <TabsTrigger value="image" className="gap-1.5 px-2.5 sm:px-3">
-              <ImageIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <TabsTrigger value="image" className="gap-1 rounded-md px-2.5 py-1 text-xs">
+              <ImageIcon className="h-3 w-3 text-primary/70" />
               Image
-              <span className="tabular-nums text-muted-foreground">({gridCardCounts.image})</span>
             </TabsTrigger>
-            <TabsTrigger value="video" className="gap-1.5 px-2.5 sm:px-3">
-              <Clapperboard className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+            <TabsTrigger value="video" className="gap-1 rounded-md px-2.5 py-1 text-xs">
+              <Clapperboard className="h-3 w-3 text-primary/70" />
               Video
-              <span className="tabular-nums text-muted-foreground">({gridCardCounts.video})</span>
             </TabsTrigger>
-            <TabsTrigger value="music" className="gap-1.5 px-2.5 sm:px-3">
-              <Music2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            <TabsTrigger value="music" className="gap-1 rounded-md px-2.5 py-1 text-xs">
+              <Music2 className="h-3 w-3 text-primary/70" />
               Music
-              <span className="tabular-nums text-muted-foreground">({gridCardCounts.music})</span>
             </TabsTrigger>
-            <TabsTrigger value="speech" className="gap-1.5 px-2.5 sm:px-3">
-              <Mic className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+            <TabsTrigger value="speech" className="gap-1 rounded-md px-2.5 py-1 text-xs">
+              <Mic className="h-3 w-3 text-primary/70" />
               Speech
-              <span className="tabular-nums text-muted-foreground">({gridCardCounts.speech})</span>
             </TabsTrigger>
           </TabsList>
 
-          <div className="relative mt-2 shrink-0">
+          <div className="relative mt-1.5 shrink-0">
             <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground"
               aria-hidden
             />
             <Input
               type="search"
               value={modelSearch}
               onChange={(e) => setModelSearch(e.target.value)}
-              placeholder="Search by name, id, or provider…"
+              placeholder="Search models…"
               disabled={busy || modelsLoading}
-              className="h-9 rounded-lg border-border/60 bg-card/40 pl-9 text-sm shadow-inner shadow-black/5"
+              className="h-7 rounded-md border-border/50 bg-card/30 pl-7 text-xs"
               aria-label="Search models"
               autoComplete="off"
             />
-            {searchNeedle && (
-              <p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
-                {filteredGridItems.length} match{filteredGridItems.length === 1 ? '' : 'es'} in this tab
-              </p>
-            )}
           </div>
 
           <TabsContent value="all" className="mt-2 min-h-0 flex-1 overflow-hidden data-[state=inactive]:hidden">

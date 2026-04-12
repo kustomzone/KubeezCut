@@ -2,15 +2,14 @@ import { rewriteKubeezMediaCdnUrlForFetch } from '@/infrastructure/kubeez/kubeez
 import { extractKubeezPollStatus, isKubeezPlainObject } from '@/infrastructure/kubeez/kubeez-poll-status';
 import { readKubeezSseUntilResult } from '@/infrastructure/kubeez/kubeez-sse';
 import { createLogger } from '@/shared/logging/logger';
-import { DEFAULT_VOICE_ID, TEXT_TO_DIALOGUE_VOICES } from '@/infrastructure/kubeez/kubeez-dialogue-voices';
+import { DEFAULT_VOICE_ID, TEXT_TO_DIALOGUE_VOICES, type VoiceCategory } from '@/infrastructure/kubeez/kubeez-dialogue-voices';
 import { KUBEEZ_CLIENT_HTTP_405_HINT, resolveKubeezApiBaseUrl } from './kubeez-text-to-image';
 
 const logger = createLogger('KubeezAudio');
 
-/** Voice ids/labels from `kubeez-dialogue-voices.ts` (ElevenLabs / Kie text-to-dialogue style). */
-export const KUBEEZ_DIALOGUE_VOICE_OPTIONS: { id: string; label: string }[] = TEXT_TO_DIALOGUE_VOICES.map(
-  ({ id, label }) => ({ id, label })
-);
+/** Voice ids/labels/categories from `kubeez-dialogue-voices.ts`. */
+export const KUBEEZ_DIALOGUE_VOICE_OPTIONS: { id: string; label: string; category?: VoiceCategory }[] =
+  TEXT_TO_DIALOGUE_VOICES.map(({ id, label, category }) => ({ id, label, category }));
 
 /** Default voice id for speech generation (first entry in website catalog). */
 export const KUBEEZ_DEFAULT_DIALOGUE_VOICE_ID = DEFAULT_VOICE_ID;
@@ -50,10 +49,22 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 function extractGenerationId(data: unknown): string | null {
-  if (!data || typeof data !== 'object') return null;
-  const o = data as Record<string, unknown>;
-  const id = o.generation_id ?? o.id ?? o.generationId;
-  return typeof id === 'string' && id.length > 0 ? id : null;
+  if (!isKubeezPlainObject(data)) return null;
+  const pickId = (o: Record<string, unknown>): string | null => {
+    const id = o.generation_id ?? o.id ?? o.generationId ?? o.task_id ?? o.taskId;
+    return typeof id === 'string' && id.length > 0 ? id : null;
+  };
+  const top = pickId(data);
+  if (top) return top;
+  // Check nested wrappers (API may return { data: { generation_id: ... } })
+  for (const k of ['data', 'result', 'generation', 'job'] as const) {
+    const nested = data[k];
+    if (isKubeezPlainObject(nested)) {
+      const id = pickId(nested);
+      if (id) return id;
+    }
+  }
+  return null;
 }
 
 const URL_VALUE_KEYS = [
@@ -231,6 +242,25 @@ function sanitizeMusicFileBase(title: string, index: number, runTs: number): str
   return `kubeez-music-${safe || `track-${index + 1}`}-${runTs}-${index + 1}`;
 }
 
+/**
+ * True when every entry in `songs[]` has a final `audio_url` (not just a `stream_url`).
+ * While the API is still rendering, some songs may only have `stream_url`; downloading those
+ * yields an incomplete/streaming asset instead of the finished audio file.
+ */
+function allSongsHaveFinalAudioUrl(data: unknown): boolean {
+  const roots = collectCandidateRoots(data);
+  for (const root of roots) {
+    const songs = root.songs;
+    if (!Array.isArray(songs) || songs.length === 0) continue;
+    for (const s of songs) {
+      if (!isKubeezPlainObject(s)) return false;
+      const au = s.audio_url;
+      if (typeof au !== 'string' || au.length === 0 || !isLikelyHttpUrl(au)) return false;
+    }
+  }
+  return true;
+}
+
 /** Collect one entry per `songs[]` row with a playable URL (`audio_url` or `stream_url`). */
 function collectMusicSongSpecsFromPayload(data: unknown): { url: string; fileBase: string }[] {
   const runTs = Date.now();
@@ -265,11 +295,24 @@ async function downloadMusicFileResultsFromSpecs(
   );
 }
 
-/** When status is complete: download all `songs[]` variants or a single legacy output URL. */
+/**
+ * When status is complete: download all `songs[]` variants or a single legacy output URL.
+ *
+ * @param acceptStreamUrls When false (default), only resolves when **all** songs have their
+ *   final `audio_url`. Pass true as a last-resort fallback when the status is terminal but
+ *   `audio_url` never appeared — in that case `stream_url` is accepted so we don't hang.
+ */
 async function tryResolveMusicCompletionPayload(
   body: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  acceptStreamUrls = false,
 ): Promise<KubeezMusicFileResult[] | null> {
+  // Only proceed when every song has its final `audio_url`; while the API is still
+  // rendering, some songs may only carry a `stream_url` (incomplete / streaming asset).
+  if (!acceptStreamUrls && !allSongsHaveFinalAudioUrl(body)) {
+    return null;
+  }
+
   const specs = collectMusicSongSpecsFromPayload(body);
   if (specs.length > 0) {
     return downloadMusicFileResultsFromSpecs(specs, signal);
@@ -399,17 +442,19 @@ async function pollKubeezMusicJob(params: {
       return resolvedNow;
     }
 
+    // 'streaming' is intentionally NOT terminal — songs are still being rendered
+    // and may only have stream_url (not the final audio_url) at this point.
     const terminalOk =
       status === 'completed' ||
       status === 'complete' ||
       status === 'success' ||
       status === 'succeeded' ||
-      status === 'streaming' ||
       status === 'ready' ||
       status === 'done' ||
       status === 'finished';
 
     if (terminalOk) {
+      // Terminal: try the other endpoint first (with final audio_url requirement)
       const otherUrl = via === 'music' ? mediaUrl : musicUrl;
       const otherRes = await fetch(otherUrl, { headers: { 'X-API-Key': apiKey }, signal });
       if (otherRes.ok) {
@@ -418,6 +463,11 @@ async function pollKubeezMusicJob(params: {
         if (resolvedOther && resolvedOther.length > 0) {
           return resolvedOther;
         }
+      }
+      // Last resort: accept stream_url when the status is terminal but audio_url never appeared.
+      const resolvedFallback = await tryResolveMusicCompletionPayload(statusBody, signal, true);
+      if (resolvedFallback && resolvedFallback.length > 0) {
+        return resolvedFallback;
       }
 
       if (import.meta.env.DEV && attempt % 5 === 0) {
@@ -634,6 +684,7 @@ export async function generateKubeezDialogueBlob(params: GenerateKubeezDialogueP
   };
 
   const payload = {
+    model: 'text-to-dialogue-v3',
     dialogue: dialogue.map((d) => ({
       text: d.text,
       ...(d.voice !== undefined && d.voice !== '' ? { voice: d.voice } : {}),

@@ -62,6 +62,8 @@ export interface KubeezPendingGeneration {
   createdAt: number;
   status: 'generating' | 'error';
   errorMessage?: string;
+  /** Estimated generation time in seconds (from API model metadata). */
+  estimatedTimeSeconds?: number;
 }
 
 export interface MediaLibraryState {

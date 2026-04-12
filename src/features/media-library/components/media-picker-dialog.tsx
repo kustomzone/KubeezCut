@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Video, FileAudio, Image as ImageIcon, Search, Loader2 } from 'lucide-react';
+import { Video, FileAudio, Image as ImageIcon, Search, Loader2, Film } from 'lucide-react';
 import type { MediaMetadata } from '@/types/storage';
 import { useMediaLibraryStore } from '../stores/media-library-store';
 import { mediaLibraryService } from '../services/media-library-service';
@@ -28,7 +28,7 @@ const typeIcons: Record<string, typeof Video> = {
   video: Video,
   audio: FileAudio,
   image: ImageIcon,
-  unknown: Video, // Fallback
+  unknown: Film,
 };
 
 function MediaPickerItem({
@@ -40,57 +40,49 @@ function MediaPickerItem({
 }) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const mediaType = getMediaType(media.mimeType);
-  const IconComponent = typeIcons[mediaType] || Video;
+  const IconComponent = typeIcons[mediaType] || Film;
 
   useEffect(() => {
     let mounted = true;
-
-    const loadThumbnail = async () => {
-      const url = await mediaLibraryService.getThumbnailBlobUrl(media.id);
-      if (mounted) {
-        setThumbnailUrl(url);
-      }
-    };
-
-    loadThumbnail();
-
-    return () => {
-      mounted = false;
-    };
+    mediaLibraryService.getThumbnailBlobUrl(media.id).then((url) => {
+      if (mounted) setThumbnailUrl(url);
+    });
+    return () => { mounted = false; };
   }, [media.id]);
 
   return (
     <button
       onClick={onSelect}
-      className="flex w-full items-start gap-3 rounded-lg border border-transparent p-2 text-left transition-colors hover:border-border hover:bg-secondary/50"
+      className="group flex flex-col overflow-hidden rounded-lg border border-border/50 bg-card/50 transition-all hover:border-primary/50 hover:bg-card hover:shadow-md"
     >
       {/* Thumbnail */}
-      <div className="relative w-12 h-12 rounded overflow-hidden bg-secondary flex-shrink-0">
+      <div className="relative aspect-video w-full overflow-hidden bg-secondary/50">
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
             alt={media.fileName}
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <IconComponent className="w-5 h-5 text-muted-foreground" />
+          <div className="flex h-full w-full items-center justify-center">
+            <IconComponent className="h-6 w-6 text-muted-foreground/40" />
           </div>
         )}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium leading-snug break-words">{media.fileName}</p>
-        <p className="text-xs text-muted-foreground">
+        {/* Duration / dimensions badge */}
+        <div className="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white/90">
           {mediaType === 'audio' || mediaType === 'video'
             ? formatDuration(media.duration)
-            : `${media.width}x${media.height}`}
+            : media.width && media.height
+              ? `${media.width}\u00d7${media.height}`
+              : mediaType}
+        </div>
+      </div>
+      {/* Label */}
+      <div className="px-2 py-1.5">
+        <p className="truncate text-[11px] font-medium leading-tight text-foreground/80 group-hover:text-foreground">
+          {media.fileName}
         </p>
       </div>
-
-      {/* Type icon */}
-      <IconComponent className="w-4 h-4 text-muted-foreground flex-shrink-0" />
     </button>
   );
 }
@@ -108,33 +100,23 @@ export function MediaPickerDialog({
   const isLoading = useMediaLibraryStore((s) => s.isLoading);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Reset search when dialog opens
   useEffect(() => {
-    if (open) {
-      setSearchQuery('');
-    }
+    if (open) setSearchQuery('');
   }, [open]);
 
-  // Filter media items
   const filteredItems = useMemo(() => {
     let items = mediaItems;
-
-    // Filter by type if specified
     if (filterType) {
       const mimePrefix = `${filterType}/`;
       items = items.filter((m) => m.mimeType.startsWith(mimePrefix));
     }
-
     if (filterItem) {
       items = items.filter(filterItem);
     }
-
-    // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       items = items.filter((m) => m.fileName.toLowerCase().includes(query));
     }
-
     return items;
   }, [mediaItems, filterType, filterItem, searchQuery]);
 
@@ -145,50 +127,55 @@ export function MediaPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-h-[70vh] w-[min(92vw,960px)] max-w-[960px]">
-        <DialogHeader>
-          <DialogTitle className="pr-8 leading-snug break-words">{title}</DialogTitle>
-          <DialogDescription>
-            {description ?? `Choose a ${filterType || 'media'} file from your library.`}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex h-[min(70vh,520px)] w-[min(92vw,540px)] max-w-[540px] flex-col gap-0 overflow-hidden p-0">
+        <div className="shrink-0 space-y-3 border-b border-border/60 px-4 pb-3 pt-4">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-sm font-semibold">{title}</DialogTitle>
+            {description && (
+              <DialogDescription className="text-[11px]">
+                {description}
+              </DialogDescription>
+            )}
+          </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search media..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="h-8 pl-8 text-xs"
             />
           </div>
+        </div>
 
-          {/* Media list */}
-          <div className="max-h-[400px] overflow-y-auto space-y-1 pr-2">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:thin]">
+          {isLoading ? (
+            <div className="flex min-h-[200px] items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 text-center">
+              <Film className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-xs text-muted-foreground">
                 {searchQuery
-                  ? 'No media found matching your search.'
+                  ? 'No media matches your search.'
                   : filterType
-                  ? `No ${filterType} files in library.`
-                  : 'No media in library.'}
-              </div>
-            ) : (
-              filteredItems.map((media) => (
+                    ? `No ${filterType} files in library.`
+                    : 'No media in library.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {filteredItems.map((media) => (
                 <MediaPickerItem
                   key={media.id}
                   media={media}
                   onSelect={() => handleSelect(media.id)}
                 />
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
