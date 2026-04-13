@@ -61,7 +61,7 @@ export const FILMSTRIP_EXTRACT_WIDTH = Math.round(FILMSTRIP_EXTRACT_HEIGHT * (16
 // =============================================================================
 
 const MIN_ZOOM_LEVEL = 0.01;
-const MAX_ZOOM_LEVEL = 2; // Capped at 2x for UI performance
+const MAX_ZOOM_LEVEL = 50; // Matches zoom-store internal limit; enables frame-level zoom for tiny clips
 
 export const BASE_SNAP_THRESHOLD_PIXELS = 8; // Base threshold at 1x zoom
 

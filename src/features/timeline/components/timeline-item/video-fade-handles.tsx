@@ -1,4 +1,5 @@
-import { memo, useState } from 'react';
+import { memo, useRef, useState, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/shared/ui/cn';
 import { getAudioFadeHandleLeft, type AudioFadeHandle } from '../../utils/audio-fade';
 
@@ -17,11 +18,33 @@ interface VideoFadeHandlesProps {
   onFadeHandleDoubleClick: (handle: AudioFadeHandle) => void;
 }
 
+function FadeTooltip({
+  anchorRect,
+  label,
+}: {
+  anchorRect: DOMRect | null;
+  label: string;
+}) {
+  if (!anchorRect) return null;
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-full rounded bg-slate-950/95 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-lg whitespace-nowrap"
+      style={{
+        left: anchorRect.left + anchorRect.width / 2,
+        top: anchorRect.top - 4,
+      }}
+    >
+      {label}
+    </div>,
+    document.body
+  );
+}
+
 export const VideoFadeHandles = memo(function VideoFadeHandles({
   trackLocked,
   activeTool,
   clipWidth,
-  lineYPercent,
+  lineYPercent: _lineYPercent,
   fadeInPixels,
   fadeOutPixels,
   isSelected,
@@ -32,17 +55,28 @@ export const VideoFadeHandles = memo(function VideoFadeHandles({
   onFadeHandleDoubleClick,
 }: VideoFadeHandlesProps) {
   const [hoveredHandle, setHoveredHandle] = useState<AudioFadeHandle | null>(null);
+  const fadeInRef = useRef<HTMLButtonElement>(null);
+  const fadeOutRef = useRef<HTMLButtonElement>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!hoveredHandle) { setAnchorRect(null); return; }
+    const el = hoveredHandle === 'in' ? fadeInRef.current : fadeOutRef.current;
+    if (el) setAnchorRect(el.getBoundingClientRect());
+  }, [hoveredHandle, fadeInPixels, fadeOutPixels, clipWidth]);
 
   if (trackLocked || activeTool !== 'select') {
     return null;
   }
 
-  const handleVisibilityClass = isEditing || isSelected
-    ? 'opacity-100'
-    : 'opacity-0 group-hover/timeline-item:opacity-100';
+  // Only show fade handles when the clip is actually selected (or being edited).
+  // Previously they showed on hover too, which blocked clicks on small clips.
+  if (!isSelected && !isEditing) {
+    return null;
+  }
+
   const fadeInLeft = getAudioFadeHandleLeft({ handle: 'in', clipWidthPixels: clipWidth, fadePixels: fadeInPixels });
   const fadeOutLeft = getAudioFadeHandleLeft({ handle: 'out', clipWidthPixels: clipWidth, fadePixels: fadeOutPixels });
-  const activeLeft = hoveredHandle === 'in' ? fadeInLeft : fadeOutLeft;
   const visibleLabel = hoveredHandle === 'in'
     ? fadeInLabel
     : hoveredHandle === 'out'
@@ -50,17 +84,18 @@ export const VideoFadeHandles = memo(function VideoFadeHandles({
       : null;
   const handleTop = '-2px';
 
-  const getHandleClassName = () => cn(
-    'absolute h-2.5 w-2.5 -translate-x-1/2 rounded-[2px] border pointer-events-auto transition-opacity cursor-ew-resize touch-none before:absolute before:-inset-[9px] before:content-[""] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-l-[3px] after:border-r-[3px] after:border-t-[4px] after:border-l-transparent after:border-r-transparent focus-visible:outline-none',
-    'border-slate-950/70 bg-white after:border-t-white/90 shadow-[0_0_0_1px_rgba(15,23,42,0.25)]',
-    handleVisibilityClass,
+  const handleClassName = cn(
+    'absolute h-2.5 w-2.5 -translate-x-1/2 rounded-[2px] border pointer-events-auto transition-opacity cursor-ew-resize touch-none focus-visible:outline-none',
+    'border-slate-950/70 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.25)]',
+    'after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-l-[3px] after:border-r-[3px] after:border-t-[4px] after:border-l-transparent after:border-r-transparent after:border-t-white/90',
   );
 
   return (
     <div className="absolute inset-0 pointer-events-none z-30">
       <button
+        ref={fadeInRef}
         type="button"
-        className={getHandleClassName()}
+        className={handleClassName}
         style={{ left: `${fadeInLeft}px`, top: handleTop }}
         onClick={(e) => {
           e.preventDefault();
@@ -77,8 +112,9 @@ export const VideoFadeHandles = memo(function VideoFadeHandles({
         aria-label="Adjust video fade in"
       />
       <button
+        ref={fadeOutRef}
         type="button"
-        className={getHandleClassName()}
+        className={handleClassName}
         style={{ left: `${fadeOutLeft}px`, top: handleTop }}
         onClick={(e) => {
           e.preventDefault();
@@ -96,12 +132,7 @@ export const VideoFadeHandles = memo(function VideoFadeHandles({
       />
 
       {hoveredHandle && visibleLabel && (
-        <div
-          className="absolute -translate-x-1/2 -translate-y-full rounded bg-slate-950/95 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-lg whitespace-nowrap"
-          style={{ left: `${activeLeft}px`, top: `calc(${lineYPercent}% + 10px)` }}
-        >
-          {visibleLabel}
-        </div>
+        <FadeTooltip anchorRect={anchorRect} label={visibleLabel} />
       )}
     </div>
   );

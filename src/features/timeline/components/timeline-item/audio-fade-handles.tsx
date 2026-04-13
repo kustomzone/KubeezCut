@@ -1,6 +1,20 @@
-import { memo, useState } from 'react';
+import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/shared/ui/cn';
 import { getAudioFadeHandleLeft } from '../../utils/audio-fade';
+
+function FadeTooltip({ anchorRect, label }: { anchorRect: DOMRect | null; label: string }) {
+  if (!anchorRect) return null;
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-full rounded bg-slate-950/95 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-lg whitespace-nowrap"
+      style={{ left: anchorRect.left + anchorRect.width / 2, top: anchorRect.top - 4 }}
+    >
+      {label}
+    </div>,
+    document.body
+  );
+}
 
 interface AudioFadeHandlesProps {
   trackLocked: boolean;
@@ -26,7 +40,7 @@ export const AudioFadeHandles = memo(function AudioFadeHandles({
   trackLocked,
   activeTool,
   clipWidth,
-  lineYPercent,
+  lineYPercent: _lineYPercent,
   fadeInPixels,
   fadeOutPixels,
   isSelected,
@@ -42,18 +56,29 @@ export const AudioFadeHandles = memo(function AudioFadeHandles({
   onFadeCurveDotDoubleClick,
 }: AudioFadeHandlesProps) {
   const [hoveredHandle, setHoveredHandle] = useState<'in' | 'out' | null>(null);
+  const fadeInRef = useRef<HTMLButtonElement>(null);
+  const fadeOutRef = useRef<HTMLButtonElement>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!hoveredHandle) { setAnchorRect(null); return; }
+    const el = hoveredHandle === 'in' ? fadeInRef.current : fadeOutRef.current;
+    if (el) setAnchorRect(el.getBoundingClientRect());
+  }, [hoveredHandle, fadeInPixels, fadeOutPixels, clipWidth]);
 
   if (trackLocked || activeTool !== 'select') {
     return null;
   }
 
-  const handleVisibilityClass = isEditing || isSelected
-    ? 'opacity-100'
-    : 'opacity-0 group-hover/timeline-item:opacity-100';
+  // Only render when the clip is actually selected/editing. Prevents the fade handles
+  // from blocking clicks on small (unselected) clips at low zoom.
+  if (!isSelected && !isEditing) {
+    return null;
+  }
+
   const fadeInLeft = getAudioFadeHandleLeft({ handle: 'in', clipWidthPixels: clipWidth, fadePixels: fadeInPixels });
   const fadeOutLeft = getAudioFadeHandleLeft({ handle: 'out', clipWidthPixels: clipWidth, fadePixels: fadeOutPixels });
   const visibleLabelHandle = hoveredHandle;
-  const activeLeft = visibleLabelHandle === 'in' ? fadeInLeft : fadeOutLeft;
   const visibleLabel = hoveredHandle === 'in'
     ? fadeInLabel
     : hoveredHandle === 'out'
@@ -63,9 +88,9 @@ export const AudioFadeHandles = memo(function AudioFadeHandles({
 
   const getHandleClassName = () => {
     return cn(
-      'absolute h-2.5 w-2.5 -translate-x-1/2 rounded-[2px] border pointer-events-auto transition-opacity cursor-ew-resize touch-none before:absolute before:-inset-[9px] before:content-[""] after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-l-[3px] after:border-r-[3px] after:border-t-[4px] after:border-l-transparent after:border-r-transparent focus-visible:outline-none',
-      'border-slate-950/70 bg-white after:border-t-white/90 shadow-[0_0_0_1px_rgba(15,23,42,0.25)]',
-      handleVisibilityClass,
+      'absolute h-2.5 w-2.5 -translate-x-1/2 rounded-[2px] border pointer-events-auto transition-opacity cursor-ew-resize touch-none focus-visible:outline-none',
+      'border-slate-950/70 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.25)]',
+      'after:absolute after:left-1/2 after:top-full after:-translate-x-1/2 after:border-l-[3px] after:border-r-[3px] after:border-t-[4px] after:border-l-transparent after:border-r-transparent after:border-t-white/90',
     );
   };
 
@@ -73,14 +98,15 @@ export const AudioFadeHandles = memo(function AudioFadeHandles({
     const isActive = curveEditingHandle === handle || hoveredHandle === handle;
 
     return cn(
-      'absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/40 shadow-[0_0_0_1px_rgba(15,23,42,0.2)] transition-opacity pointer-events-auto cursor-move touch-none before:absolute before:-inset-[8px] before:content-[""] focus-visible:outline-none',
-      isActive ? 'bg-primary opacity-100' : 'bg-primary/90 opacity-0 group-hover/timeline-item:opacity-100',
+      'absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/40 shadow-[0_0_0_1px_rgba(15,23,42,0.2)] transition-opacity pointer-events-auto cursor-move touch-none focus-visible:outline-none',
+      isActive ? 'bg-primary opacity-100' : 'bg-primary/90',
     );
   };
 
   return (
     <div className="absolute inset-0 pointer-events-none z-40">
       <button
+        ref={fadeInRef}
         type="button"
         className={getHandleClassName()}
         style={{ left: `${fadeInLeft}px`, top: handleTop }}
@@ -95,6 +121,7 @@ export const AudioFadeHandles = memo(function AudioFadeHandles({
         aria-label="Adjust audio fade in"
       />
       <button
+        ref={fadeOutRef}
         type="button"
         className={getHandleClassName()}
         style={{ left: `${fadeOutLeft}px`, top: handleTop }}
@@ -143,12 +170,7 @@ export const AudioFadeHandles = memo(function AudioFadeHandles({
       )}
 
       {visibleLabelHandle && visibleLabel && (
-        <div
-          className="absolute -translate-x-1/2 rounded bg-slate-950/95 px-1.5 py-0.5 text-[10px] font-medium text-white shadow-lg whitespace-nowrap"
-          style={{ left: `${activeLeft}px`, top: `calc(${lineYPercent}% + 10px)` }}
-        >
-          {visibleLabel}
-        </div>
+        <FadeTooltip anchorRect={anchorRect} label={visibleLabel} />
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useTimelineStore } from '../stores/timeline-store';
 import { useZoomStore } from '../stores/zoom-store';
+import { ZOOM_MAX, ZOOM_MIN } from '../constants';
 import { createLogger } from '@/shared/logging/logger';
 
 const logger = createLogger('TimelineZoom');
@@ -18,8 +19,8 @@ interface UseTimelineZoomOptions {
  */
 export function useTimelineZoom(options: UseTimelineZoomOptions = {}) {
   const {
-    minZoom = 0.01,
-    maxZoom = 10,
+    minZoom = ZOOM_MIN,
+    maxZoom = ZOOM_MAX,
   } = options;
 
   // Use granular selectors - Zustand v5 best practice

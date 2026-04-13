@@ -143,59 +143,60 @@ export const TrackHeader = memo(function TrackHeader({
           onDrop={handleHeaderMediaDrop}
           data-track-id={track.id}
         >
+          {trackKind === 'video' && (
+            <Video className="size-3.5 shrink-0 text-muted-foreground opacity-70" aria-hidden />
+          )}
+          {trackKind === 'audio' && (
+            <Music className="size-3.5 shrink-0 text-muted-foreground opacity-70" aria-hidden />
+          )}
+
           <span className="min-w-0 flex-1 truncate text-left text-xs font-medium leading-none">
             {track.name}
           </span>
 
           <div className="flex shrink-0 items-center gap-0.5">
             {trackKind === 'video' && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={btnClass}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleVisibility();
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  aria-label={isHidden ? 'Show track' : 'Hide track'}
-                  data-tooltip={isHidden ? 'Show track' : 'Hide track'}
-                >
-                  {isHidden ? (
-                    <EyeOff className="size-3.5 text-destructive" />
-                  ) : (
-                    <Eye className="size-3.5 text-muted-foreground" />
-                  )}
-                </Button>
-                <Video className="size-3.5 shrink-0 text-muted-foreground opacity-70" aria-hidden />
-              </>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={btnClass}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleVisibility();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                aria-label={isHidden ? 'Show track' : 'Hide track'}
+                data-tooltip={isHidden ? 'Show track' : 'Hide track'}
+              >
+                {isHidden ? (
+                  <EyeOff className="size-3.5 text-destructive" />
+                ) : (
+                  <Eye className="size-3.5 text-muted-foreground" />
+                )}
+              </Button>
             )}
 
             {trackKind === 'audio' && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className={btnClass}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleMute();
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  aria-label={isMuted ? 'Unmute track' : 'Mute track'}
-                  data-tooltip={isMuted ? 'Unmute track' : 'Mute track'}
-                >
-                  {isMuted ? (
-                    <VolumeX className="size-3.5 text-destructive" />
-                  ) : (
-                    <Volume2 className="size-3.5 text-muted-foreground" />
-                  )}
-                </Button>
-                <Music className="size-3.5 shrink-0 text-muted-foreground opacity-70" aria-hidden />
-              </>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={btnClass}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleMute();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                aria-label={isMuted ? 'Unmute track' : 'Mute track'}
+                data-tooltip={isMuted ? 'Unmute track' : 'Mute track'}
+              >
+                {isMuted ? (
+                  <VolumeX className="size-3.5 text-destructive" />
+                ) : (
+                  <Volume2 className="size-3.5 text-muted-foreground" />
+                )}
+              </Button>
             )}
 
             <Button

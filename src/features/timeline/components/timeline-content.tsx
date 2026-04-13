@@ -22,7 +22,7 @@ import {
   TIMELINE_ZOOM_WHEEL_DELTA_CAP,
   TIMELINE_ZOOM_WHEEL_EXP_DIVISOR,
 } from '../constants/opencut-interaction';
-import { MIN_TOP_VIDEO_NEW_TRACK_DROP_ZONE_PX } from '../constants';
+import { MIN_TOP_VIDEO_NEW_TRACK_DROP_ZONE_PX, ZOOM_MAX, ZOOM_MIN } from '../constants';
 
 // Components
 import { TimelineMarkers } from './timeline-markers';
@@ -155,8 +155,8 @@ export const TimelineContent = memo(function TimelineContent({
   const furthestItemEndFrame = useItemsStore((s) => s.maxItemEndFrame);
   const maxTimelineFrame = Math.floor(Math.max(furthestItemEndFrame / fps, 10) * fps);
   const { timeToPixels, frameToPixels, pixelsToFrame, setZoom, setZoomImmediate, zoomLevel } = useTimelineZoom({
-    minZoom: 0.01,
-    maxZoom: 2, // Match slider range
+    minZoom: ZOOM_MIN,
+    maxZoom: ZOOM_MAX,
   });
   // NOTE: Don't subscribe to currentFrame here - it would cause re-renders every frame!
   // Use refs to access it in callbacks instead (see currentFrameRef below)
@@ -690,7 +690,7 @@ export const TimelineContent = memo(function TimelineContent({
     const currentZoom = zoomLevelRef.current;
 
     // Clamp zoom to valid range
-    const clampedZoom = Math.max(0.01, Math.min(2, newZoomLevel));
+    const clampedZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoomLevel));
     if (clampedZoom === currentZoom) return;
 
     // Cursor's screen position (relative to container's visible left edge)
@@ -735,14 +735,12 @@ export const TimelineContent = memo(function TimelineContent({
   }, [applyZoomWithPlayheadCentering]);
 
   const handleZoomIn = useCallback(() => {
-    // Use standard zoom step (0.1), read from ref to avoid callback recreation
-    const newZoomLevel = Math.min(2, zoomLevelRef.current + 0.1);
+    const newZoomLevel = Math.min(ZOOM_MAX, zoomLevelRef.current * 1.2);
     applyZoomWithPlayheadCentering(newZoomLevel);
   }, [applyZoomWithPlayheadCentering]);
 
   const handleZoomOut = useCallback(() => {
-    // Use standard zoom step (0.1), read from ref to avoid callback recreation
-    const newZoomLevel = Math.max(0.01, zoomLevelRef.current - 0.1);
+    const newZoomLevel = Math.max(ZOOM_MIN, zoomLevelRef.current / 1.2);
     applyZoomWithPlayheadCentering(newZoomLevel);
   }, [applyZoomWithPlayheadCentering]);
 
@@ -842,7 +840,7 @@ export const TimelineContent = memo(function TimelineContent({
 
       zoomCursorXRef.current = lastPinchWheelClientXRef.current;
       const prev = zoomLevelRef.current;
-      const nextZoom = Math.max(0.01, Math.min(2, prev * zoomFactor));
+      const nextZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, prev * zoomFactor));
       if (nextZoom !== prev) {
         applyZoomWithPlayheadCentering(nextZoom);
       }
