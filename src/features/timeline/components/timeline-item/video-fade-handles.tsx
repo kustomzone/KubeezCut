@@ -44,7 +44,7 @@ export const VideoFadeHandles = memo(function VideoFadeHandles({
   trackLocked,
   activeTool,
   clipWidth,
-  lineYPercent: _lineYPercent,
+  lineYPercent,
   fadeInPixels,
   fadeOutPixels,
   isSelected,
@@ -54,6 +54,7 @@ export const VideoFadeHandles = memo(function VideoFadeHandles({
   onFadeHandleMouseDown,
   onFadeHandleDoubleClick,
 }: VideoFadeHandlesProps) {
+  void lineYPercent; // now positioned via portal tooltip; kept in props for API stability
   const [hoveredHandle, setHoveredHandle] = useState<AudioFadeHandle | null>(null);
   const fadeInRef = useRef<HTMLButtonElement>(null);
   const fadeOutRef = useRef<HTMLButtonElement>(null);
