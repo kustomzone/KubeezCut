@@ -556,6 +556,56 @@ export const TimelineContent = memo(function TimelineContent({
     if (usePlaybackStore.getState().previewFrame !== null) {
       setPreviewFrameRef.current(null);
     }
+
+    // Click-to-seek: mousedown on empty track area moves the playhead there.
+    // The ruler has its own scrub handler; clips, handles, and drop zones swallow
+    // the event before it reaches us. Marquee drag still activates if the user
+    // drags past threshold.
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // Only seek from inside the tracks area — leave the ruler's own handler alone.
+    const inTracks = !!target.closest('.timeline-tracks');
+    if (!inTracks) return;
+
+    // Skip anything interactive/structural: items, resize handles, push handles,
+    // playhead, gizmos, buttons, inputs. These are the same guards marquee uses.
+    if (
+      target.closest('[data-item-id]')
+      || target.closest('[data-resize-handle]')
+      || target.closest('[data-track-push]')
+      || target.closest('[data-playhead-handle]')
+      || target.closest('[data-gizmo]')
+      || target.closest('button')
+      || target.closest('input')
+      || target.closest('a')
+      || target.closest('[role="button"]')
+    ) {
+      return;
+    }
+
+    const scrollContainer = containerRef.current;
+    if (!scrollContainer) return;
+
+    const rect = scrollContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left + scrollContainer.scrollLeft;
+    const frame = Math.max(
+      0,
+      Math.min(Math.round(pixelsToFrameRef.current(x)), maxTimelineFrameRef.current)
+    );
+
+    const playback = usePlaybackStore.getState();
+    if (playback.isPlaying) playback.pause();
+    playback.setScrubFrame(frame);
+
+    // Prevent the deselect-on-click handler from immediately clearing any
+    // selection the seek made sense for; also matches ruler scrub behavior.
+    scrubWasActiveRef.current = true;
+    if (scrubTimeoutRef.current !== null) clearTimeout(scrubTimeoutRef.current);
+    scrubTimeoutRef.current = setTimeout(() => {
+      scrubWasActiveRef.current = false;
+      scrubTimeoutRef.current = null;
+    }, 100);
   }, []);
 
   const handleTimelineMouseMove = useCallback((e: React.MouseEvent) => {

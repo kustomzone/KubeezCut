@@ -264,6 +264,19 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   const isLinked = useItemsStore(
     useCallback((s) => hasLinkedItems(s.items, item.id), [item.id])
   );
+  // For linked A/V pairs, the video side owns the linked / broken-media badges.
+  // Audio companions suppress them so each pair shows a single, non-spammy icon.
+  const isLinkedAudioCompanion = useItemsStore(
+    useCallback(
+      (s) => {
+        if (item.type !== 'audio') return false;
+        const group = getLinkedItems(s.items, item.id);
+        if (group.length <= 1) return false;
+        return group.some((sibling) => sibling.id !== item.id && sibling.type === 'video');
+      },
+      [item.id, item.type],
+    ),
+  );
   const linkedSelectionEnabled = useEditorStore((s) => s.linkedSelectionEnabled);
   const segmentOverlays = useTimelineItemOverlayStore(
     useCallback((s) => s.overlaysByItemId[item.id] ?? EMPTY_SEGMENT_OVERLAYS, [item.id])
@@ -3276,14 +3289,14 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
               item={contentVisualPreviewItem}
               clipWidth={visualWidth}
               fps={fps}
-              isLinked={isLinked}
+              isLinked={isLinked && !isLinkedAudioCompanion}
               isClipVisible={clipVisibility.isVisible}
               visibleStartRatio={clipVisibility.visibleStartRatio}
               visibleEndRatio={clipVisibility.visibleEndRatio}
               pixelsPerSecond={pixelsPerSecond}
               preferImmediateRendering={preferImmediateContentRendering}
               audioWaveformScale={audioVisualizationScale}
-              linkedSyncOffsetFrames={linkedSyncOffsetFrames}
+              linkedSyncOffsetFrames={isLinkedAudioCompanion ? null : linkedSyncOffsetFrames}
             />
 
             {/* Status indicators */}
@@ -3292,7 +3305,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
               currentSpeed={currentSpeed}
               isStretching={isStretching}
               stretchFeedback={stretchFeedback}
-              isBroken={isBroken}
+              isBroken={isBroken && !isLinkedAudioCompanion}
               hasMediaId={!!item.mediaId}
               isMask={item.type === 'shape' ? item.isMask ?? false : false}
               isShape={item.type === 'shape'}
