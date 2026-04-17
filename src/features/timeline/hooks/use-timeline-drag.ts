@@ -24,12 +24,55 @@ import {
 import { useLinkedEditPreviewStore } from '../stores/linked-edit-preview-store';
 import { DRAG_THRESHOLD_PIXELS } from '../constants';
 import { createLogger } from '@/shared/logging/logger';
+import {
+  measureInteraction,
+  measureInteractionToNextFrame,
+  recordInteractionInterval,
+  resetInteractionInterval,
+} from '@/shared/logging/interaction-perf-monitor';
 
 const logger = createLogger('TimelineDrag');
 
 // Shared ref for drag offset (avoids re-renders from store updates)
 export const dragOffsetRef = { current: { x: 0, y: 0 } };
 export const dragPreviewOffsetByItemRef = { current: {} as Record<string, { x: number; y: number }> };
+
+/**
+ * Registry of DOM elements for all TimelineItems, keyed by item.id. Populated by
+ * each TimelineItem on mount and cleared on unmount. The drag hook uses this to
+ * apply `style.transform` to every dragged item synchronously in the mousemove
+ * handler, so linked items move in the same frame as the anchor (instead of
+ * waiting on per-item rAF loops that can lag behind during heavy commits).
+ */
+const timelineItemElementRegistry = new Map<string, HTMLElement>();
+
+export function registerTimelineItemElement(itemId: string, element: HTMLElement): void {
+  timelineItemElementRegistry.set(itemId, element);
+}
+
+export function unregisterTimelineItemElement(itemId: string, element: HTMLElement): void {
+  // Only delete if the current entry is this element — guards against an unmount
+  // from a previous render racing a fresh mount for the same id.
+  if (timelineItemElementRegistry.get(itemId) === element) {
+    timelineItemElementRegistry.delete(itemId);
+  }
+}
+
+function applyDragTransform(itemId: string, x: number, y: number): void {
+  const el = timelineItemElementRegistry.get(itemId);
+  if (el) {
+    el.style.transform = `translate(${x}px, ${y}px)`;
+  }
+}
+
+function clearDragTransforms(itemIds: ReadonlyArray<string>): void {
+  for (const id of itemIds) {
+    const el = timelineItemElementRegistry.get(id);
+    if (el) {
+      el.style.transform = '';
+    }
+  }
+}
 
 /**
  * Clamp a proposed frame so the item doesn't visually overlap other items
@@ -312,12 +355,18 @@ export function useTimelineDrag(
 
     linkedMovePreviewSignatureRef.current = signature;
 
+    const endLinkedPreview = measureInteraction('clip-drag:linkedPreviewSet');
     if (previewUpdates.length === 0) {
       useLinkedEditPreviewStore.getState().clear();
-      return;
+    } else {
+      useLinkedEditPreviewStore.getState().setUpdates(previewUpdates);
     }
-
-    useLinkedEditPreviewStore.getState().setUpdates(previewUpdates);
+    endLinkedPreview();
+    // Measure from store-write through the next rAF. Every TimelineItem
+    // subscribes to this store (see timeline-item/index.tsx:628), so a write
+    // re-renders all linked items — that cascade shows up here, not in
+    // linkedPreviewSet which only covers the synchronous store mutation.
+    measureInteractionToNextFrame('clip-drag:linkedStoreCommit');
   }, []);
 
   // Get zoom utilities
@@ -667,15 +716,27 @@ export function useTimelineDrag(
   useEffect(() => {
     if (!dragStateRef.current || !isDragging) return;
 
+    // Prime the interval sampler so the first mousemove after drag-start doesn't record
+    // the stale gap from the previous drag (or from initial mouseover to first move).
+    resetInteractionInterval('clip-drag:mousemoveInterval');
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragStateRef.current) return;
+      // Sample the gap between consecutive mousemove dispatches. A handler that measures
+      // as "fast" but has long intervals between moves means the browser is starved by work
+      // queued elsewhere (React commit, GC, layout).
+      recordInteractionInterval('clip-drag:mousemoveInterval');
+      const endPerf = measureInteraction('clip-drag:processMove');
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      const altKey = e.altKey;
 
-      const deltaX = e.clientX - dragStateRef.current.startMouseX;
-      const deltaY = e.clientY - dragStateRef.current.startMouseY;
+      const deltaX = clientX - dragStateRef.current.startMouseX;
+      const deltaY = clientY - dragStateRef.current.startMouseY;
 
       // Dynamic Alt key toggle - update state and cursor
-      const altKeyChanged = isAltDragRef.current !== e.altKey;
-      isAltDragRef.current = e.altKey;
+      const altKeyChanged = isAltDragRef.current !== altKey;
+      isAltDragRef.current = altKey;
 
       // Calculate clamped delta to prevent visual preview from going below frame 0
       const deltaFrames = pixelsToFramePreciseRef.current(deltaX);
@@ -701,7 +762,7 @@ export function useTimelineDrag(
         : deltaX;
 
       const currentItems = getItems();
-      const dropTarget = getTrackDropTarget(e.clientY, dragStateRef.current.startTrackId);
+      const dropTarget = getTrackDropTarget(clientY, dragStateRef.current.startTrackId);
       const previewTrackTargets = resolveDraggedTrackTargets({
         items: currentItems,
         draggedItems: dragStateRef.current.draggedItems,
@@ -712,7 +773,7 @@ export function useTimelineDrag(
           ?? 64,
       });
       const hoveredCompatibleTrackId = getCompatibleTrackIdFromMouseY(
-        e.clientY,
+        clientY,
         dragStateRef.current.startTrackId,
         item.type,
       );
@@ -725,10 +786,10 @@ export function useTimelineDrag(
       const previewAnchorTrackId = previewTrackTargets?.trackAssignments.get(dragStateRef.current.itemId)
         ?? hoveredCompatibleTrackId
         ?? dragStateRef.current.startTrackId;
-      dragStateRef.current.currentMouseX = e.clientX;
-      dragStateRef.current.currentMouseY = e.clientY;
+      dragStateRef.current.currentMouseX = clientX;
+      dragStateRef.current.currentMouseY = clientY;
 
-      setGlobalDragCursor(hasInvalidExplicitDropTarget ? 'not-allowed' : e.altKey ? 'copy' : 'grabbing');
+      setGlobalDragCursor(hasInvalidExplicitDropTarget ? 'not-allowed' : altKey ? 'copy' : 'grabbing');
 
       // For multi-item drag, calculate group bounding box for snap visualization
       // Note: deltaFrames and draggedItems already calculated above for clamping
@@ -894,12 +955,26 @@ export function useTimelineDrag(
         setLinkedMovePreview(currentItems, linkedPreviewMovedItems);
       }
 
-      if (elementRef?.current && !isAltDragRef.current) {
-        elementRef.current.style.transform = `translate(${anchorPreviewOffset.x}px, ${anchorPreviewOffset.y}px)`;
-      }
-
       dragOffsetRef.current = anchorPreviewOffset;
       dragPreviewOffsetByItemRef.current = previewOffsets ?? {};
+
+      // Apply transforms synchronously to every dragged item (anchor + linked
+      // followers). This is the single source of truth for drag-time positioning.
+      // Doing it here — not in a per-item rAF loop — guarantees the anchor and
+      // its linked siblings move in the same paint, eliminating the 1-frame lag
+      // that caused video/audio to visually desync during drag.
+      if (!isAltDragRef.current) {
+        if (previewOffsets) {
+          for (const draggedItem of draggedItems) {
+            const offset = previewOffsets[draggedItem.id] ?? anchorPreviewOffset;
+            applyDragTransform(draggedItem.id, offset.x, offset.y);
+          }
+        } else {
+          // Single-item drag: no previewOffsets map; anchor is the only mover.
+          applyDragTransform(dragStateRef.current.itemId, anchorPreviewOffset.x, anchorPreviewOffset.y);
+        }
+      }
+
       setDragOffset(anchorPreviewOffset);
 
       // Only update store when snap target or alt state actually changes to reduce re-renders
@@ -928,9 +1003,15 @@ export function useTimelineDrag(
           offset: { x: clampedDeltaX, y: deltaY },
           activeSnapTarget: snapResult.snapTarget,
           activeLinkedDropTarget: linkedDropTarget,
-          isAltDrag: e.altKey,
+          isAltDrag: altKey,
         });
       }
+      endPerf();
+      // Measure from "state updates scheduled" through to the next animation frame —
+      // this is the window where React commits, subscribers re-render, and layout runs.
+      // A healthy drag is ~16ms here; a lagging drag will show this scope ballooning
+      // while `processMove` stays low.
+      measureInteractionToNextFrame('clip-drag:commitToPaint');
     };
 
     const handleMouseUp = () => {
@@ -1065,6 +1146,7 @@ export function useTimelineDrag(
           if (finalPosition === null) {
             logger.warn(isAltDrag ? 'Cannot duplicate items: no available space' : 'Cannot move items: no available space');
             // Clean up and cancel - defer drag state to avoid render cascade
+            clearDragTransforms(dragState.draggedItems.map((d) => d.id));
             if (elementRef?.current) {
               elementRef.current.style.transform = '';
             }
@@ -1183,6 +1265,7 @@ export function useTimelineDrag(
       // Clean up - defer drag state clearing to avoid multiple render cycles
       // The move operation already triggered a re-render; clearing drag state
       // should happen after that render completes
+      clearDragTransforms(dragState.draggedItems.map((d) => d.id));
       if (elementRef?.current) {
         elementRef.current.style.transform = '';
       }
@@ -1213,6 +1296,11 @@ export function useTimelineDrag(
       return () => {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
+        // If the effect tears down mid-drag (unmount, hot-reload, prop change),
+        // leftover transforms on follower items would strand them visually.
+        if (dragStateRef.current) {
+          clearDragTransforms(dragStateRef.current.draggedItems.map((d) => d.id));
+        }
         clearLinkedMovePreview();
         clearGlobalDragCursor();
         document.body.style.userSelect = '';

@@ -82,9 +82,9 @@ export const AudioVolumeControl = memo(function AudioVolumeControl({
           e.preventDefault();
           e.stopPropagation();
 
-          if (isDragEnabled) {
-            onVolumeDoubleClick();
-          }
+          // Fire even when not hover-armed — double-click should always reset to 0 dB,
+          // otherwise users have to pre-hover for 180ms which feels broken.
+          onVolumeDoubleClick();
         }}
         tabIndex={-1}
         aria-label="Adjust clip volume"

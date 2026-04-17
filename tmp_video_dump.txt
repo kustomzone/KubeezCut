@@ -1,0 +1,547 @@
+Total: 80
+
+grok-image-to-video
+  pmax=5000 ar=['2:3', '3:2', '1:1', '9:16', '16:9'] dur=['6s', '10s'] quality=['480p', '720p'] max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Image-to-video only. Require source_media_urls with exactly one image URL. duration: 6 or 10 seconds. resolution: '480p' or '720p'. mode: 'fun' | 'normal' | 'spicy' — note that `spicy` auto-downgrades to `normal` for image-to-video (only text-to-video honors spicy). Output always includes audio; n
+
+grok-text-to-video-6s
+  pmax=5000 ar=['2:3', '3:2', '1:1', '9:16', '16:9'] dur=['6s', '10s'] quality=['480p', '720p'] max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Text-to-video only. duration: 6 or 10 seconds (pass as string). resolution: '480p' or '720p' (default 720p). mode: 'fun' | 'normal' (default) | 'spicy' — controls content style/edginess. Omit source_media_urls. Output always includes audio; no sound parameter.
+
+kling-2-5-image-to-video-pro
+  pmax=2500 ar=None dur=[] quality=None max_imgs=2 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Use when you have both plates. Image-to-video with start and end frame. Require source_media_urls with exactly 2 image URLs. negative_prompt supported. Prompt max 2500 chars. Output includes audio; no sound parameter.
+
+kling-2-5-image-to-video-pro-10s
+  pmax=2500 ar=None dur=[] quality=None max_imgs=2 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Use when you have both plates. Image-to-video with start and end frame. Require source_media_urls with exactly 2 image URLs. negative_prompt supported. Prompt max 2500 chars. Output includes audio; no sound parameter.
+
+kling-2-6-image-to-video-10s
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=1 sound=True
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. Use sound: true for audio, false for silent. Prompt max 2500 chars.
+
+kling-2-6-image-to-video-10s-audio
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=1 sound=True
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. Use sound: true for audio, false for silent. Prompt max 2500 chars.
+
+kling-2-6-image-to-video-5s
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=1 sound=True
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. Use sound: true for audio, false for silent. Prompt max 2500 chars.
+
+kling-2-6-image-to-video-5s-audio
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=1 sound=True
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. Use sound: true for audio, false for silent. Prompt max 2500 chars.
+
+kling-2-6-motion-control-1080p
+  pmax=2500 ar=['16:9', '9:16', '1:1'] dur=[] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image', 'video']
+  notes=Same as kling-2-6-motion-control-720p. Requires 1 image + 1 video URL in source_media_urls. Output typically includes audio; no sound parameter.
+
+kling-2-6-motion-control-720p
+  pmax=2500 ar=['16:9', '9:16', '1:1'] dur=[] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image', 'video']
+  notes=Motion Control: requires exactly 1 image URL + 1 video URL in source_media_urls (image first, then video). Video max 30s, typically MP4/WebM up to 100MB. Output typically includes audio (from generation); no sound parameter.
+
+kling-2-6-text-to-video-10s
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=0 sound=True
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Text-to-video only. Omit source_media_urls. duration 5s or 10s. Use sound: true for audio, sound: false for silent. Prompt max 2500 chars.
+
+kling-2-6-text-to-video-10s-audio
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=0 sound=True
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Text-to-video only. Omit source_media_urls. duration 5s or 10s. Use sound: true for audio, sound: false for silent. Prompt max 2500 chars.
+
+kling-2-6-text-to-video-5s
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=0 sound=True
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Text-to-video only. Omit source_media_urls. duration 5s or 10s. Use sound: true for audio, sound: false for silent. Prompt max 2500 chars.
+
+kling-2-6-text-to-video-5s-audio
+  pmax=2500 ar=['1:1', '16:9', '9:16'] dur=['5s', '10s'] quality=None max_imgs=0 sound=True
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Superior camera motion, native audio-video sync in one pass. Choose for social media and cinematic camera shots. Text-to-video only. Omit source_media_urls. duration 5s or 10s. Use sound: true for audio, sound: false for silent. Prompt max 2500 chars.
+
+kling-3-0-motion-control-1080p
+  pmax=2500 ar=None dur=[] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image', 'video']
+  notes=Same as kling-3-0-motion-control-720p. Requires 1 image + 1 video URL in source_media_urls. Output typically includes audio; no sound parameter.
+
+kling-3-0-motion-control-720p
+  pmax=2500 ar=None dur=[] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image', 'video']
+  notes=Same as Kling 2.6 Motion Control. Requires 1 image + 1 video URL in source_media_urls (image first, then video). Video max 30s. Output typically includes audio; no sound parameter.
+
+kling-3-0-pro
+  pmax=2500 ar=['16:9', '9:16', '1:1'] dur=['3s', '4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Kling 3.0 pro — highest-quality tier.
+
+Modes:
+  • text-to-video → omit source_media_urls.
+  • image-to-video → pass 1 image URL (start frame) or 2 image URLs (start + end frame) in source_media_urls.
+
+Duration: any integer 3–15 seconds. sound: true/false toggles generated audio.
+
+PRICING
+
+kling-3-0-std
+  pmax=2500 ar=['16:9', '9:16', '1:1'] dur=['3s', '4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Kling 3.0 standard — high-quality video at a cheaper rate than pro.
+
+Modes:
+  • text-to-video → omit source_media_urls.
+  • image-to-video → pass 1 image URL (start frame) or 2 image URLs (start + end frame) in source_media_urls.
+
+Duration: any integer 3–15 seconds. sound: true/false tog
+
+p-video
+  pmax=2000 ar=['16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '1:1'] dur=['1s', '2s', '3s', '4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s', '16s', '17s', '18s', '19s', '20s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'audio']
+  notes=Fast video generation with draft mode for rapid iteration.
+
+Generation modes (auto-detected from source_media_urls):
+  • text-to-video: prompt only (no source_media_urls).
+  • image-to-video: pass 1 image (start frame), optional 2nd (end frame).
+Audio is an OPTIONAL INPUT — not a separate gene
+
+seedance-1-5-pro-1080p-12s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-1080p-12s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-1080p-4s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-1080p-4s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-1080p-8s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-1080p-8s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-480p-12s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-480p-12s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-480p-4s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-480p-4s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-480p-8s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-480p-8s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-720p-12s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-720p-12s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-720p-4s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-720p-4s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-720p-8s
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-1-5-pro-720p-8s-audio
+  pmax=2500 ar=['1:1', '21:9', '4:3', '3:4', '16:9', '9:16'] dur=['4s', '8s', '12s'] quality=None max_imgs=2 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Video generation with start/end frame support.
+
+Generation modes:
+  • Text-to-video: prompt only, no images needed.
+  • Image-to-video: pass 2 images (start + end frame) in source_media_urls.
+
+Resolutions: 480p, 720p, 1080p. Duration: 4s, 8s, or 12s.
+Audio: use sound: true for generated audio (a
+
+seedance-2-480p
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the higher-quality, slower, more expensive variant of Seedance 2. Pick `seedance-2` when the user wants the best Seedance 2 output, hasn't specified a preference, or asks for 'best quality'/'standard'. For cheaper or faster generation pick `seedance-2-fast`. Both tiers share the same input s
+
+seedance-2-480p-video-ref
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the higher-quality, slower, more expensive variant of Seedance 2. Pick `seedance-2` when the user wants the best Seedance 2 output, hasn't specified a preference, or asks for 'best quality'/'standard'. For cheaper or faster generation pick `seedance-2-fast`. Both tiers share the same input s
+
+seedance-2-720p
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the higher-quality, slower, more expensive variant of Seedance 2. Pick `seedance-2` when the user wants the best Seedance 2 output, hasn't specified a preference, or asks for 'best quality'/'standard'. For cheaper or faster generation pick `seedance-2-fast`. Both tiers share the same input s
+
+seedance-2-720p-video-ref
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the higher-quality, slower, more expensive variant of Seedance 2. Pick `seedance-2` when the user wants the best Seedance 2 output, hasn't specified a preference, or asks for 'best quality'/'standard'. For cheaper or faster generation pick `seedance-2-fast`. Both tiers share the same input s
+
+seedance-2-fast-480p
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the cheaper, faster variant of Seedance 2. Pick `seedance-2-fast` when the user wants lower cost, quick turnaround, drafts, bulk runs, or explicitly asks for 'fast' / 'cheap'. For higher-fidelity output prefer `seedance-2` (standard tier). Both tiers share the same input schema, same edge fu
+
+seedance-2-fast-480p-video-ref
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the cheaper, faster variant of Seedance 2. Pick `seedance-2-fast` when the user wants lower cost, quick turnaround, drafts, bulk runs, or explicitly asks for 'fast' / 'cheap'. For higher-fidelity output prefer `seedance-2` (standard tier). Both tiers share the same input schema, same edge fu
+
+seedance-2-fast-720p
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the cheaper, faster variant of Seedance 2. Pick `seedance-2-fast` when the user wants lower cost, quick turnaround, drafts, bulk runs, or explicitly asks for 'fast' / 'cheap'. For higher-fidelity output prefer `seedance-2` (standard tier). Both tiers share the same input schema, same edge fu
+
+seedance-2-fast-720p-video-ref
+  pmax=2500 ar=['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] dur=['4s', '5s', '6s', '7s', '8s', '9s', '10s', '11s', '12s', '13s', '14s', '15s'] quality=None max_imgs=9 sound=True
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image', 'video', 'audio']
+  notes=This is the cheaper, faster variant of Seedance 2. Pick `seedance-2-fast` when the user wants lower cost, quick turnaround, drafts, bulk runs, or explicitly asks for 'fast' / 'cheap'. For higher-fidelity output prefer `seedance-2` (standard tier). Both tiers share the same input schema, same edge fu
+
+sora-2-image-to-video-10s
+  pmax=5000 ar=['16:9', '9:16'] dur=['10s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=False input=[]
+  notes=Best for narrative shots + dialogue. Text-to-video: omit source_media_urls; use duration 10s or 15s. Image-to-video: pass exactly one image URL in source_media_urls. Output includes audio; no sound parameter.
+
+sora-2-image-to-video-15s
+  pmax=5000 ar=['16:9', '9:16'] dur=['15s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=False input=[]
+  notes=Best for narrative shots + dialogue. Text-to-video: omit source_media_urls; use duration 10s or 15s. Image-to-video: pass exactly one image URL in source_media_urls. Output includes audio; no sound parameter.
+
+sora-2-pro-image-to-video-10s-hd
+  pmax=5000 ar=['16:9', '9:16'] dur=['10s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-pro-image-to-video-10s-standard
+  pmax=5000 ar=['16:9', '9:16'] dur=['10s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-pro-image-to-video-15s-hd
+  pmax=5000 ar=['16:9', '9:16'] dur=['15s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-pro-image-to-video-15s-standard
+  pmax=5000 ar=['16:9', '9:16'] dur=['15s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-pro-storyboard-10s
+  pmax=5000 ar=['16:9', '9:16'] dur=['10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Pass scene arrays. Scene-based; duration 10s, 15s, or 25s. Optional single image in source_media_urls. Output includes audio; no sound parameter.
+
+sora-2-pro-storyboard-15s
+  pmax=5000 ar=['16:9', '9:16'] dur=['15s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Pass scene arrays. Scene-based; duration 10s, 15s, or 25s. Optional single image in source_media_urls. Output includes audio; no sound parameter.
+
+sora-2-pro-storyboard-25s
+  pmax=5000 ar=['16:9', '9:16'] dur=['25s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=['image']
+  notes=Pass scene arrays. Scene-based; duration 10s, 15s, or 25s. Optional single image in source_media_urls. Output includes audio; no sound parameter.
+
+sora-2-pro-text-to-video-10s-hd
+  pmax=5000 ar=['16:9', '9:16'] dur=['10s'] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-pro-text-to-video-10s-standard
+  pmax=5000 ar=['16:9', '9:16'] dur=['10s'] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-pro-text-to-video-15s-hd
+  pmax=5000 ar=['16:9', '9:16'] dur=['15s'] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-pro-text-to-video-15s-standard
+  pmax=5000 ar=['16:9', '9:16'] dur=['15s'] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Same as sora-2. quality: standard or pro/hd for HD. duration 10s or 15s. Output includes audio; no sound parameter.
+
+sora-2-text-to-video-10s
+  pmax=5000 ar=['16:9', '9:16'] dur=['10s'] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Best for narrative shots + dialogue. Text-to-video: omit source_media_urls; use duration 10s or 15s. Image-to-video: pass exactly one image URL in source_media_urls. Output includes audio; no sound parameter.
+
+sora-2-text-to-video-15s
+  pmax=5000 ar=['16:9', '9:16'] dur=['15s'] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=[]
+  notes=Best for narrative shots + dialogue. Text-to-video: omit source_media_urls; use duration 10s or 15s. Image-to-video: pass exactly one image URL in source_media_urls. Output includes audio; no sound parameter.
+
+v1-pro-fast-i2v-1080p-10s
+  pmax=5000 ar=None dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Silent output only. Seedance 1.0 (model_id: v1-pro-fast-i2v). Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. No generated audio: silent video only (unlike most other video models).
+
+v1-pro-fast-i2v-1080p-5s
+  pmax=5000 ar=None dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Silent output only. Seedance 1.0 (model_id: v1-pro-fast-i2v). Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. No generated audio: silent video only (unlike most other video models).
+
+v1-pro-fast-i2v-720p-10s
+  pmax=5000 ar=None dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Silent output only. Seedance 1.0 (model_id: v1-pro-fast-i2v). Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. No generated audio: silent video only (unlike most other video models).
+
+v1-pro-fast-i2v-720p-5s
+  pmax=5000 ar=None dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['image-to-video'] req_media=True input=['image']
+  notes=Silent output only. Seedance 1.0 (model_id: v1-pro-fast-i2v). Image-to-video only. Require source_media_urls with exactly one image URL. duration 5s or 10s. No generated audio: silent video only (unlike most other video models).
+
+veo3-1-fast-first-and-last-frames
+  pmax=5000 ar=['16:9', '9:16'] dur=[] quality=None max_imgs=2 sound=False
+  gen_types=['first-and-last-frames'] req_media=False input=['image']
+  notes=First + last frame variant. Pass EXACTLY 2 images in source_media_urls — index 0 = start frame, index 1 = end frame. The model interpolates motion between them. Audio is always included. Duration is automatic.
+
+veo3-1-fast-reference-to-video
+  pmax=5000 ar=['16:9'] dur=[] quality=None max_imgs=3 sound=False
+  gen_types=['reference-to-video'] req_media=False input=['image']
+  notes=Reference-to-video variant. Pass 1-3 reference images in source_media_urls — the model uses them to guide the visual style of the generated video. Aspect ratio is LOCKED to 16:9 (any other value is ignored by the backend). Audio is always included. Duration is automatic (not configurable).
+
+veo3-1-fast-text-to-video
+  pmax=5000 ar=['16:9', '9:16'] dur=[] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=['image']
+  notes=Text-to-video variant. Prompt only — no input images are consumed by this variant (if you need image inputs, use the first-and-last-frames or reference-to-video variant). Audio is always included. Duration is automatic.
+
+veo3-1-first-and-last-frames
+  pmax=5000 ar=['16:9', '9:16'] dur=[] quality=None max_imgs=2 sound=False
+  gen_types=['first-and-last-frames'] req_media=False input=['image']
+  notes=First + last frame variant. Pass EXACTLY 2 images in source_media_urls — index 0 = start frame, index 1 = end frame. The model interpolates motion between them. Audio is always included. Duration is automatic.
+
+veo3-1-lite-first-and-last-frames
+  pmax=5000 ar=['16:9', '9:16'] dur=[] quality=None max_imgs=2 sound=False
+  gen_types=['first-and-last-frames'] req_media=False input=['image']
+  notes=First + last frame variant. Pass EXACTLY 2 images in source_media_urls — index 0 = start frame, index 1 = end frame. The model interpolates motion between them. Audio is always included. Duration is automatic.
+
+veo3-1-lite-text-to-video
+  pmax=5000 ar=['16:9', '9:16'] dur=[] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=['image']
+  notes=Text-to-video variant. Prompt only — no input images are consumed by this variant (if you need image inputs, use the first-and-last-frames or reference-to-video variant). Audio is always included. Duration is automatic.
+
+veo3-1-text-to-video
+  pmax=5000 ar=['16:9', '9:16'] dur=[] quality=None max_imgs=0 sound=False
+  gen_types=['text-to-video'] req_media=False input=['image']
+  notes=Text-to-video variant. Prompt only — no input images are consumed by this variant (if you need image inputs, use the first-and-last-frames or reference-to-video variant). Audio is always included. Duration is automatic.
+
+wan-2-5
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-image-to-video-10s-1080p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-image-to-video-10s-720p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-image-to-video-5s-1080p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-image-to-video-5s-720p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-text-to-video-10s-1080p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-text-to-video-10s-720p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-text-to-video-5s-1080p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+
+wan-2-5-text-to-video-5s-720p
+  pmax=800 ar=['16:9', '9:16', '1:1'] dur=['5s', '10s'] quality=None max_imgs=1 sound=False
+  gen_types=['text-to-video', 'image-to-video'] req_media=False input=[]
+  notes=5s/10s, 720p/1080p. Prompt max 800 chars. Text-to-video: omit source_media_urls. Image-to-video: exactly one image URL. duration 5s or 10s. negative_prompt supported. Output includes audio; no sound parameter.
+

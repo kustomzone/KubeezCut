@@ -607,7 +607,18 @@ export function KubeezGenerateImageDialog({
   useEffect(() => {
     const opts = uiModel?.durationOptions;
     if (opts?.length) {
-      setVideoDuration((prev) => (opts.includes(prev) ? prev : opts[0]!));
+      setVideoDuration((prev) => {
+        if (opts.includes(prev)) return prev;
+        // For wide duration ranges (Kling 3.0 std/pro: 3s..15s, p-video: 1s..20s) the cheapest
+        // option is usually too short — prefer a sensible default so users don't silently pay
+        // for 3s clips when they meant 5s.
+        if (opts.length > 3) {
+          for (const preferred of ['5s', '4s', '6s', '8s']) {
+            if (opts.includes(preferred)) return preferred;
+          }
+        }
+        return opts[0]!;
+      });
     } else {
       setVideoDuration('');
     }

@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo, memo, useCallback, useState, type CSSProper
 import type { TimelineItem as TimelineItemType } from '@/types/timeline';
 import { useShallow } from 'zustand/react/shallow';
 import { setMixerLiveGains, getMixerLiveGain, clearMixerLiveGain } from '@/shared/state/mixer-live-gain';
+import { measureInteraction } from '@/shared/logging/interaction-perf-monitor';
 import { useTimelineZoomContext } from '../../contexts/timeline-zoom-context';
 import { useTimelineStore } from '../../stores/timeline-store';
 import { useItemsStore } from '../../stores/items-store';
@@ -29,7 +30,13 @@ import type { PreviewItemUpdate } from '../../utils/item-edit-preview';
 import { mediaTranscriptionService } from '@/features/timeline/deps/media-transcription-service';
 import { getMediaDragData } from '@/features/timeline/deps/media-library-resolver';
 import { useSettingsStore } from '@/features/timeline/deps/settings';
-import { useTimelineDrag, dragOffsetRef, dragPreviewOffsetByItemRef } from '../../hooks/use-timeline-drag';
+import {
+  useTimelineDrag,
+  dragOffsetRef,
+  dragPreviewOffsetByItemRef,
+  registerTimelineItemElement,
+  unregisterTimelineItemElement,
+} from '../../hooks/use-timeline-drag';
 import { useTimelineTrim } from '../../hooks/use-timeline-trim';
 import { useTrackPush } from '../../hooks/use-track-push';
 import { isRateStretchableItem, useRateStretch } from '../../hooks/use-rate-stretch';
@@ -447,6 +454,19 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
   }, [activeGlobalCursorClass]);
 
   const wasDraggingRef = useRef(false);
+
+  // Register the transform element with the drag hook's registry so the hook can
+  // apply transforms directly to every dragged item (including linked siblings)
+  // in the same frame as the anchor. Without this, followers rely on a per-item
+  // rAF loop that can trail the anchor by 1+ frames under heavy React commits.
+  useEffect(() => {
+    const el = transformRef.current;
+    if (!el) return;
+    registerTimelineItemElement(item.id, el);
+    return () => {
+      unregisterTimelineItemElement(item.id, el);
+    };
+  }, [item.id]);
 
   // Track drag participation via ref subscription - NO RE-RENDERS on drag state changes
   const isAnyDragActiveRef = useRef(false);
@@ -2595,6 +2615,29 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
       });
     };
 
+    // rAF-throttle drag updates so the React state writes (label viewport + mixer live gain)
+    // coalesce to at most one per frame. Without this, mousemove can fire 120+ Hz and each
+    // update cascades through the heavy TimelineItem render tree, producing visible lag.
+    let pendingFrame: number | null = null;
+    const flushFrame = () => {
+      pendingFrame = null;
+      if (!isDragActive) return;
+      const endPerf = measureInteraction('audio-volume-drag:flushFrame');
+      setAudioVolumeLabelViewport({ clientX: latestClientX, clientY: latestClientY });
+      applyPreview(computeVolumeDb(latestClientY));
+      endPerf();
+    };
+    const scheduleFrame = () => {
+      if (pendingFrame !== null) return;
+      pendingFrame = window.requestAnimationFrame(flushFrame);
+    };
+    const cancelFrame = () => {
+      if (pendingFrame !== null) {
+        window.cancelAnimationFrame(pendingFrame);
+        pendingFrame = null;
+      }
+    };
+
     const handleWindowMouseMove = (event: MouseEvent) => {
       latestClientY = event.clientY;
       latestClientX = event.clientX;
@@ -2609,8 +2652,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         return;
       }
 
-      setAudioVolumeLabelViewport({ clientX: event.clientX, clientY: event.clientY });
-      applyPreview(computeVolumeDb(event.clientY));
+      scheduleFrame();
     };
     const handleWindowMouseUp = () => {
       if (!isDragActive) {
@@ -2621,6 +2663,11 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
         return;
       }
 
+      // Flush any pending rAF so the commit sees the final pointer position, not a stale frame.
+      if (pendingFrame !== null) {
+        cancelFrame();
+        applyPreview(computeVolumeDb(latestClientY));
+      }
       finishEdit();
     };
 
@@ -2632,6 +2679,7 @@ export const TimelineItem = memo(function TimelineItem({ item, timelineDuration 
     }, AUDIO_VOLUME_DRAG_ACTIVATION_DELAY_MS);
     audioVolumeCleanupRef.current = () => {
       clearActivationTimeout();
+      cancelFrame();
       window.removeEventListener('mousemove', handleWindowMouseMove);
       window.removeEventListener('mouseup', handleWindowMouseUp);
     };

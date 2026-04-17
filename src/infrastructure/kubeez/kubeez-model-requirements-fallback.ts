@@ -68,7 +68,7 @@ const EXACT: Record<string, Partial<KubeezMediaModelOption>> = {
     showAspectRatio: true,
   },
 
-  // Z-Image (ReplicateZImageService)
+  // Z-Image (ReplicateZImageService) — live API reports 5000.
   'z-image': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
   'z-image-hd': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
 
@@ -87,8 +87,9 @@ const EXACT: Record<string, Partial<KubeezMediaModelOption>> = {
   'nano-banana-pro-2K': { prompt_max_chars: 20_000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
   'nano-banana-pro-4K': { prompt_max_chars: 20_000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
 
-  'gpt-1.5-image-medium': { prompt_max_chars: 3000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
-  'gpt-1.5-image-high': { prompt_max_chars: 3000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
+  // GPT-1.5 Image — API accepts ONLY 1:1, 2:3, 3:2 (not 16:9 / 9:16 / 4:3 / 3:4).
+  'gpt-1.5-image-medium': { prompt_max_chars: 3000, aspectRatioOptions: ['1:1', '2:3', '3:2'] },
+  'gpt-1.5-image-high': { prompt_max_chars: 3000, aspectRatioOptions: ['1:1', '2:3', '3:2'] },
 
   'qwen-text-to-image': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
   'qwen-image-to-image': { prompt_max_chars: 5000, aspectRatioOptions: [...DEFAULT_IMAGE_ASPECTS] },
@@ -110,23 +111,33 @@ const EXACT: Record<string, Partial<KubeezMediaModelOption>> = {
   'kling-3-0-motion-control-720p': { prompt_max_chars: 2500 },
   'kling-3-0-motion-control-1080p': { prompt_max_chars: 2500 },
 
-  'seedance-1-5-pro-720p-8s': { prompt_max_chars: 5000 },
-  'seedance-1-5-pro-1080p-8s': { prompt_max_chars: 5000 },
+  // Seedance 1.5 Pro — live API reports 2500, not 5000.
+  'seedance-1-5-pro-720p-8s': { prompt_max_chars: 2500 },
+  'seedance-1-5-pro-1080p-8s': { prompt_max_chars: 2500 },
+
+  // Seedance 2 (all resolution + fast + video-ref variants) — live API reports 2500.
+  'seedance-2-480p': { prompt_max_chars: 2500 },
+  'seedance-2-720p': { prompt_max_chars: 2500 },
+  'seedance-2-480p-video-ref': { prompt_max_chars: 2500 },
+  'seedance-2-720p-video-ref': { prompt_max_chars: 2500 },
+  'seedance-2-fast-480p': { prompt_max_chars: 2500 },
+  'seedance-2-fast-720p': { prompt_max_chars: 2500 },
+  'seedance-2-fast-480p-video-ref': { prompt_max_chars: 2500 },
+  'seedance-2-fast-720p-video-ref': { prompt_max_chars: 2500 },
+
+  // P-Video (unique prompt cap, accepts image + audio references).
+  'p-video': { prompt_max_chars: 2000 },
 
   'v1-pro-fast-i2v-720p-5s': { prompt_max_chars: 5000 },
   'v1-pro-fast-i2v-1080p-5s': { prompt_max_chars: 5000 },
 
   'wan-2-5': { prompt_max_chars: 800 },
-  'wan-2-5-text-to-video-5s': { prompt_max_chars: 800 },
-  'wan-2-5-image-to-video-5s': { prompt_max_chars: 800 },
 
   'grok-text-to-video-6s': { prompt_max_chars: 5000 },
   'grok-image-to-video': { prompt_max_chars: 5000 },
 
   'sora-2-text-to-video-10s': { prompt_max_chars: 5000 },
   'sora-2-image-to-video-10s': { prompt_max_chars: 5000 },
-  'sora-2-pro-text-to-video-10s': { prompt_max_chars: 5000 },
-  'sora-2-pro-image-to-video-10s': { prompt_max_chars: 5000 },
 
   'veo3-1-fast-text-to-video': { prompt_max_chars: 5000 },
   'veo3-1-text-to-video': { prompt_max_chars: 5000 },
@@ -137,8 +148,6 @@ const EXACT: Record<string, Partial<KubeezMediaModelOption>> = {
   V4_5PLUS: { prompt_max_chars: 400 },
   V5: { prompt_max_chars: 400 },
   V5_5: { prompt_max_chars: 400 },
-  'suno-add-instrumental': { prompt_max_chars: 400 },
-  'suno-add-vocals': { prompt_max_chars: 400 },
   'suno-lyrics-generation': { prompt_max_chars: 400 },
 };
 
@@ -150,8 +159,10 @@ const PREFIX_RULES: { idPrefix: string; patch: Partial<KubeezMediaModelOption> }
   { idPrefix: 'kling-2-6-', patch: { prompt_max_chars: 2500 } },
   { idPrefix: 'kling-2-5-', patch: { prompt_max_chars: 2500 } },
   { idPrefix: 'kling-3-0-', patch: { prompt_max_chars: 2500 } },
-  /** REST docs / kubeez.com rest-api-model-requirements: Seedance 1.5 Pro prompt max 5000 */
-  { idPrefix: 'seedance-1-5-pro-', patch: { prompt_max_chars: 5000 } },
+  /** Seedance 1.5 Pro — live API reports 2500. */
+  { idPrefix: 'seedance-1-5-pro-', patch: { prompt_max_chars: 2500 } },
+  /** Seedance 2 family — live API reports 2500 across all variants. */
+  { idPrefix: 'seedance-2-', patch: { prompt_max_chars: 2500 } },
   { idPrefix: 'v1-pro-fast-i2v-', patch: { prompt_max_chars: 5000 } },
   { idPrefix: 'wan-2-5-', patch: { prompt_max_chars: 800 } },
   { idPrefix: 'wan-2-5', patch: { prompt_max_chars: 800 } },

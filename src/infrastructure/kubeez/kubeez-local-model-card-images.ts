@@ -16,6 +16,7 @@ import nanobanana from '@/assets/kubeez-model-cards/nanobanana.webp';
 import nanobanana2 from '@/assets/kubeez-model-cards/nanobanana2.webp';
 import nanobananapro from '@/assets/kubeez-model-cards/nanobananapro.webp';
 import pImageEdit from '@/assets/kubeez-model-cards/p-image-edit.webp';
+import pVideo from '@/assets/kubeez-model-cards/p-video.webp';
 import qwenimage2 from '@/assets/kubeez-model-cards/qwenimage2.webp';
 import seedance from '@/assets/kubeez-model-cards/seedance.webp';
 import seedance15 from '@/assets/kubeez-model-cards/seedance1.5.webp';
@@ -117,6 +118,7 @@ function resolveByPrefixHeuristics(id: string): string | undefined {
   if (lower.startsWith('wan-2-5') || lower === 'wan-2-5') return wan;
 
   if (lower.includes('logo-maker') || lower.startsWith('logo-maker')) return logomaker;
+  if (lower === 'p-video' || lower.startsWith('p-video')) return pVideo;
   if (lower.includes('p-image-edit') || lower.startsWith('p-image')) return pImageEdit;
 
   return undefined;

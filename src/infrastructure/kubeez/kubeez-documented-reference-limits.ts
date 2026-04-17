@@ -23,13 +23,30 @@ function finiteMaxFiles(maxFiles: number): number | undefined {
   return maxFiles;
 }
 
+/**
+ * Text-to-image-only image models whose base id is NOT an edit variant.
+ * Live API `max_input_images=0` for these, but the synced web file-restrictions returns a
+ * positive cap (because KubeezWebsite internally routes base-id + refs through edit variants).
+ * KubeezCut's generate dialog shows the base model directly, so we force 0 to match the API.
+ */
+const IMAGE_TEXT_TO_IMAGE_ONLY_ZERO_REF: ReadonlySet<string> = new Set([
+  'nano-banana',
+  'flux-2-1K',
+  'flux-2-2K',
+  'grok-text-to-image',
+  'qwen-text-to-image',
+  'imagen-4',
+  'imagen-4-fast',
+  'imagen-4-ultra',
+  'logo-maker',
+  'z-image',
+  'z-image-hd',
+]);
+
 /** Kubeez REST docs (https://kubeez.com/docs/rest-api-model-requirements) — used when web returns Infinity. */
 const LEGACY_REST_EXACT: Record<string, number> = {
   '5-lite-image-to-image': 10,
   '5-lite-text-to-image': 10,
-  'flux-2': 8,
-  'flux-2-1K': 8,
-  'flux-2-2K': 8,
   'flux-2-edit-1K': 8,
   'flux-2-edit-2K': 8,
   'gpt-1.5-image-high': 16,
@@ -47,6 +64,8 @@ const LEGACY_REST_EXACT: Record<string, number> = {
   'nano-banana-pro-2K': 8,
   'nano-banana-pro-4K': 8,
   'p-image-edit': 8,
+  /** P-Video — API `max_input_images=2` (1 image + 1 audio per live capabilities block). */
+  'p-video': 2,
   'seedream-v4': 10,
   'seedream-v4-edit': 10,
   'seedream-v4-5': 10,
@@ -66,6 +85,8 @@ const LEGACY_REST_EXACT: Record<string, number> = {
 /** Longest prefixes first. Only consulted after web + exact legacy. */
 const LEGACY_REST_PREFIX_RULES: { prefix: string; maxFiles: number }[] = [
   { prefix: 'seedance-1-5-pro-', maxFiles: 2 },
+  /** Seedance 2 family — API `max_input_images=9`. */
+  { prefix: 'seedance-2-', maxFiles: 9 },
   { prefix: 'kling-2-6-image-to-video-', maxFiles: 1 },
   { prefix: 'kling-2-6-text-to-video-', maxFiles: 0 },
   { prefix: 'v1-pro-fast-i2v-', maxFiles: 1 },
@@ -84,6 +105,7 @@ const LEGACY_REST_PREFIX_RULES: { prefix: string; maxFiles: number }[] = [
  */
 export function documentedMaxReferenceFilesForModelId(modelId: string): number | undefined {
   if (!modelId) return undefined;
+  if (IMAGE_TEXT_TO_IMAGE_ONLY_ZERO_REF.has(modelId)) return 0;
   const gt = inferGenerationTypeFromConcreteModelId(modelId);
   const { maxFiles } = getFileLimitForModel(modelId, gt, { multiShot: false });
   const web = finiteMaxFiles(maxFiles);
@@ -103,6 +125,7 @@ export function effectiveMaxReferenceFilesForGenerateDialog(
   ctx: { resolvedModelId: string; baseCardId: string; settings: KubeezModelSettings }
 ): number | undefined {
   if (!model) return undefined;
+  if (IMAGE_TEXT_TO_IMAGE_ONLY_ZERO_REF.has(ctx.resolvedModelId)) return 0;
   const gen = inferGenerationTypeForKubeezCut({
     baseCardId: ctx.baseCardId,
     settings: ctx.settings,

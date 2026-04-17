@@ -512,7 +512,6 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
     resolution: '1080p' as const,
   };
   const musicEngine = modelSettings.sunoEngine ?? 'V5_5';
-  const musicTool = modelSettings.sunoTool ?? 'instrumental';
 
   const videoAspectUi = useMemo(() => {
     if (model?.mediaKind !== 'video') return null;
@@ -1290,36 +1289,6 @@ export const KubeezGenerateSelectedModelPanel = memo(function KubeezGenerateSele
                   disabled={disabled}
                   className="h-7 min-w-[2.75rem] px-2 text-[11px]"
                   onClick={() => onPatchModelSettings({ sunoEngine: id })}
-                >
-                  {label}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {modelFamilyItem?.baseCardId === 'suno-tools' ? (
-        <div className="space-y-2 border-t border-border/50 pt-3">
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Tool</p>
-          <div className="flex flex-wrap gap-1">
-            {(
-              [
-                { id: 'instrumental' as const, label: 'Add instrumental' },
-                { id: 'vocals' as const, label: 'Add vocals' },
-                { id: 'lyrics' as const, label: 'Lyrics' },
-              ] as const
-            ).map(({ id, label }) => {
-              const active = musicTool === id;
-              return (
-                <Button
-                  key={id}
-                  type="button"
-                  size="sm"
-                  variant={active ? 'default' : 'outline'}
-                  disabled={disabled}
-                  className="h-7 min-w-[5.5rem] px-2 text-[11px]"
-                  onClick={() => onPatchModelSettings({ sunoTool: id })}
                 >
                   {label}
                 </Button>

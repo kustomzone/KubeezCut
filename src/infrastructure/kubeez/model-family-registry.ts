@@ -142,16 +142,6 @@ export const KUBEEZ_MODEL_FAMILY_REGISTRY: KubeezModelFamilyRegistryEntry[] = [
     matchModelId: (id) =>
       id === 'V4' || id === 'V4_5' || id === 'V4_5PLUS' || id === 'V5' || id === 'V5_5',
   },
-  {
-    baseCardId: 'suno-tools',
-    mediaKind: 'music',
-    strategy: 'toggle',
-    displayName: 'Music tools',
-    matchModelId: (id) =>
-      id === 'suno-add-instrumental' ||
-      id === 'suno-add-vocals' ||
-      id === 'suno-lyrics-generation',
-  },
 ];
 
 export function findRegistryEntryForModelId(modelId: string): KubeezModelFamilyRegistryEntry | null {
@@ -238,8 +228,6 @@ export type KubeezWan25Settings = {
 
 export type KubeezMusicEngine = 'V4' | 'V4_5' | 'V4_5PLUS' | 'V5' | 'V5_5';
 
-export type KubeezMusicToolKind = 'instrumental' | 'vocals' | 'lyrics';
-
 export type KubeezModelSettings = {
   /**
    * Video aspect for POST `aspect_ratio` when not encoded in `model_id`.
@@ -260,7 +248,6 @@ export type KubeezModelSettings = {
   veo31?: KubeezVeo31Settings;
   wan25?: KubeezWan25Settings;
   sunoEngine?: KubeezMusicEngine;
-  sunoTool?: KubeezMusicToolKind;
   /** P Image Edit: when true (default), maps to `quality: 'turbo'` on POST /v1/generate/media */
   pImageEditTurbo?: boolean;
 };
@@ -457,9 +444,6 @@ export function defaultModelSettings(
   if (entry.strategy === 'toggle' && entry.baseCardId === 'suno-music') {
     return { sunoEngine: 'V5_5' };
   }
-  if (entry.strategy === 'toggle' && entry.baseCardId === 'suno-tools') {
-    return { sunoTool: 'instrumental' };
-  }
   if (
     entry.strategy === 'composed' &&
     entry.baseCardId !== 'veo3-1' &&
@@ -525,12 +509,6 @@ const VEO31_ID_TO_SETTINGS: Record<string, KubeezVeo31Settings> = {
   'veo3-1-lite-first-and-last-frames': { tier: 'lite', mode: 'first-and-last-frames' },
   'veo3-1-text-to-video': { tier: 'quality', mode: 'text-to-video' },
   'veo3-1-first-and-last-frames': { tier: 'quality', mode: 'first-and-last-frames' },
-};
-
-const KUBEEZ_MUSIC_TOOL_MODEL_IDS: Record<KubeezMusicToolKind, string> = {
-  instrumental: 'suno-add-instrumental',
-  vocals: 'suno-add-vocals',
-  lyrics: 'suno-lyrics-generation',
 };
 
 export function mapZImageTierToModelId(tier: KubeezZImageTier): string {
@@ -616,12 +594,3 @@ export function inferMusicEngineFromModelId(modelId: string): KubeezMusicEngine 
   return 'V5_5';
 }
 
-export function mapMusicToolToModelId(tool: KubeezMusicToolKind): string {
-  return KUBEEZ_MUSIC_TOOL_MODEL_IDS[tool];
-}
-
-export function inferMusicToolFromModelId(modelId: string): KubeezMusicToolKind {
-  if (modelId === 'suno-add-vocals') return 'vocals';
-  if (modelId === 'suno-lyrics-generation') return 'lyrics';
-  return 'instrumental';
-}

@@ -38,6 +38,21 @@ const OFFLINE_BROWSE_VIDEO_MODELS: KubeezMediaModelOption[] = [
     model_id: 'v1-pro-fast-i2v-720p-5s',
     display_name: 'Seedance 1.0',
     provider: 'ByteDance',
+    // API `generation_types=["image-to-video"]` — T2V is not supported.
+    supportsTextToVideo: false,
+    supportsImageToVideo: true,
+  }),
+  vid({
+    model_id: 'seedance-2-720p',
+    display_name: 'Seedance 2',
+    provider: 'ByteDance',
+    supportsTextToVideo: true,
+    supportsImageToVideo: true,
+  }),
+  vid({
+    model_id: 'p-video',
+    display_name: 'P-Video',
+    provider: 'Pruna AI',
     supportsTextToVideo: true,
     supportsImageToVideo: true,
   }),
@@ -103,7 +118,6 @@ const OFFLINE_BROWSE_VIDEO_MODELS: KubeezMediaModelOption[] = [
 const OFFLINE_BROWSE_IMAGE_MODELS: KubeezMediaModelOption[] = [
   img({ model_id: '5-lite-image-to-image', display_name: 'Seedream 5 Lite · Image to image', provider: 'ByteDance' }),
   img({ model_id: '5-lite-text-to-image', display_name: 'Seedream 5 Lite · Text to image', provider: 'ByteDance' }),
-  img({ model_id: 'flux-2', display_name: 'Flux 2', provider: 'Black Forest Labs' }),
   img({ model_id: 'flux-2-1K', display_name: 'Flux 2 1K', provider: 'Black Forest Labs' }),
   img({ model_id: 'flux-2-2K', display_name: 'Flux 2 2K', provider: 'Black Forest Labs' }),
   img({ model_id: 'flux-2-edit-1K', display_name: 'Flux 2 Edit 1K', provider: 'Black Forest Labs' }),
@@ -131,7 +145,6 @@ const OFFLINE_BROWSE_IMAGE_MODELS: KubeezMediaModelOption[] = [
   img({ model_id: 'seedream-v4-5', display_name: 'Seedream V4.5', provider: 'ByteDance' }),
   img({ model_id: 'seedream-v4-5-edit', display_name: 'Seedream V4.5 Edit', provider: 'ByteDance' }),
   img({ model_id: 'seedream-v4-edit', display_name: 'Seedream V4 Edit', provider: 'ByteDance' }),
-  img({ model_id: 'seedream-v5-lite', display_name: 'Seedream 5 Lite', provider: 'ByteDance' }),
   img({ model_id: 'z-image', display_name: 'Z-Image', provider: 'ByteDance' }),
   img({ model_id: 'z-image-hd', display_name: 'Z-Image HD', provider: 'ByteDance' }),
 ];
@@ -142,8 +155,6 @@ const OFFLINE_BROWSE_MUSIC_MODELS: KubeezMediaModelOption[] = [
   mus({ model_id: 'V4_5PLUS', display_name: 'V4.5+', provider: 'Kubeez' }),
   mus({ model_id: 'V5', display_name: 'V5', provider: 'Kubeez' }),
   mus({ model_id: 'V5_5', display_name: 'V5.5', provider: 'Kubeez' }),
-  mus({ model_id: 'suno-add-instrumental', display_name: 'Add instrumental', provider: 'Kubeez' }),
-  mus({ model_id: 'suno-add-vocals', display_name: 'Add vocals', provider: 'Kubeez' }),
   mus({ model_id: 'suno-lyrics-generation', display_name: 'Lyrics generation', provider: 'Kubeez' }),
 ];
 

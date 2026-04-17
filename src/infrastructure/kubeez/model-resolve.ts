@@ -10,7 +10,6 @@ import {
   inferKling25ClipFromModelId,
   inferKling26MotionFromModelId,
   inferMusicEngineFromModelId,
-  inferMusicToolFromModelId,
   inferZImageTierFromModelId,
   mapGpt15ImageQualityToModelId,
   mapGrokVideoToModelId,
@@ -22,7 +21,6 @@ import {
   mapKling30ToModelId,
   mapSora2ToModelId,
   mapMusicEngineToModelId,
-  mapMusicToolToModelId,
   mapVeo31ToModelId,
   mapWan25ToModelId,
   mapZImageTierToModelId,
@@ -101,11 +99,6 @@ export function resolveGenerationModelId(params: ResolveGenerationParams): strin
     const engine = settings.sunoEngine ?? 'V5_5';
     // Engine ids are fixed in the UI; the models list may omit some rows but the API still accepts them.
     return mapMusicEngineToModelId(engine);
-  }
-
-  if (entry.strategy === 'toggle' && entry.baseCardId === 'suno-tools') {
-    const tool = settings.sunoTool ?? 'instrumental';
-    return mapMusicToolToModelId(tool);
   }
 
   if (entry.baseCardId === 'veo3-1') {
@@ -267,8 +260,6 @@ export function resolveSelectionFromConcreteModelId(
     settings = { kling25Clip: inferKling25ClipFromModelId(concreteModelId) };
   } else if (entry.strategy === 'toggle' && entry.baseCardId === 'suno-music') {
     settings = { sunoEngine: inferMusicEngineFromModelId(concreteModelId) };
-  } else if (entry.strategy === 'toggle' && entry.baseCardId === 'suno-tools') {
-    settings = { sunoTool: inferMusicToolFromModelId(concreteModelId) };
   } else if (entry.baseCardId === 'veo3-1') {
     const parsed =
       parseVeo31Variant(concreteModelId) ?? parseVeo31Variant(pickDefaultVariant(variants).model_id);

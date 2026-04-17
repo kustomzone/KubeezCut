@@ -60,6 +60,9 @@ const ACTIVE_TIMELINE_GESTURE_CURSOR_CLASSES = [
   'timeline-cursor-slip-smart',
   'timeline-cursor-slide-smart',
   'timeline-cursor-gauge',
+  'timeline-item-drag-cursor-grabbing',
+  'timeline-item-drag-cursor-copy',
+  'timeline-item-drag-cursor-not-allowed',
 ] as const;
 
 
@@ -617,6 +620,23 @@ export const TimelineContent = memo(function TimelineContent({
       return;
     }
 
+    // Authoritative clip-drag gate: the drag hook writes dragState.isDragging
+    // synchronously the moment the drag threshold is crossed, so reading it via
+    // getState() here catches the drag on the very next event. Letting this
+    // handler through during a drag triggers setPreviewFrame → pumpRenderLoop
+    // → mediabunny decode, which runs 30-80ms per move and is the single
+    // biggest source of drag lag.
+    if (useSelectionStore.getState().dragState?.isDragging) {
+      if (previewRafRef.current !== null) {
+        cancelAnimationFrame(previewRafRef.current);
+        previewRafRef.current = null;
+      }
+      if (usePlaybackStore.getState().previewFrame !== null) {
+        setPreviewFrameRef.current(null);
+      }
+      return;
+    }
+
     const body = document.body;
     const gestureCursorActive = ACTIVE_TIMELINE_GESTURE_CURSOR_CLASSES.some((className) => body.classList.contains(className));
     const interactionLockActive = gestureCursorActive || body.style.userSelect === 'none';
@@ -669,6 +689,12 @@ export const TimelineContent = memo(function TimelineContent({
     }
     previewRafRef.current = requestAnimationFrame(() => {
       previewRafRef.current = null;
+      // Re-check just before committing: a drag can start between scheduling
+      // and firing this rAF (React's synthetic onMouseMove runs during bubble
+      // *before* the window-level threshold check that flips dragState). Without
+      // this guard, the first mousemove of every drag leaks one preview render.
+      if (useSelectionStore.getState().dragState?.isDragging) return;
+      if (usePlaybackStore.getState().isPlaying) return;
       setPreviewFrameRef.current(frame, itemId);
     });
   }, []);

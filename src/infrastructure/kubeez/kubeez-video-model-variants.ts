@@ -9,6 +9,17 @@ import { findRegistryEntryByBaseCardId, KUBEEZ_MODEL_FAMILY_REGISTRY } from './m
  */
 const VIDEO_VARIANT_SUFFIX_RE = /^(.+?)-(?:(\d+p)-)?(\d+)s(-audio)?$/;
 
+/**
+ * Extended duration-encoded ids whose tail is `-Ns-<res|tier>` rather than `-Ns` / `-res-Ns`:
+ *
+ *  - Wan 2.5: `wan-2-5-{text,image}-to-video-{5s,10s}-{720p,1080p}`
+ *  - Sora 2 Pro: `sora-2-pro-{text,image}-to-video-{10s,15s}-{hd,standard}`
+ *
+ * Only used by `videoModelIdEncodesVariantParams` to keep the POST body from appending a
+ * conflicting `duration` field. The grid-merge parser (above) stays strict.
+ */
+const VIDEO_VARIANT_TAIL_RES_OR_TIER_RE = /^(.+?)-(\d+)s-(\d+p|hd|standard)(-audio)?$/;
+
 export type ParsedVideoVariantSuffix = {
   baseId: string;
   resolution: string | null;
@@ -28,7 +39,8 @@ export function parseVideoModelVariantSuffix(modelId: string): ParsedVideoVarian
 }
 
 export function videoModelIdEncodesVariantParams(modelId: string): boolean {
-  return parseVideoModelVariantSuffix(modelId) !== null;
+  if (parseVideoModelVariantSuffix(modelId) !== null) return true;
+  return VIDEO_VARIANT_TAIL_RES_OR_TIER_RE.test(modelId);
 }
 
 export type KubeezModelFamilyGridItem = {
